@@ -19,7 +19,8 @@ package org.apache.shardingsphere.core.execute.sql.execute.result;
 
 import com.google.common.base.Optional;
 import lombok.SneakyThrows;
-import org.apache.shardingsphere.core.strategy.encrypt.ShardingEncryptorEngine;
+import org.apache.shardingsphere.core.rule.EncryptRule;
+import org.apache.shardingsphere.core.rule.ShardingRule;
 import org.apache.shardingsphere.spi.encrypt.ShardingEncryptor;
 
 import java.io.InputStream;
@@ -35,8 +36,6 @@ import java.sql.SQLXML;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.util.Calendar;
-import java.util.Collection;
-import java.util.Map;
 
 /**
  * Query result for stream loading.
@@ -51,9 +50,15 @@ public final class StreamQueryResult implements QueryResult {
     private final ResultSet resultSet;
     
     @SneakyThrows
-    public StreamQueryResult(final ResultSet resultSet, final Map<String, Collection<String>> logicAndActualTables, final ShardingEncryptorEngine shardingEncryptorEngine) {
+    public StreamQueryResult(final ResultSet resultSet, final ShardingRule shardingRule) {
         this.resultSet = resultSet;
-        metaData = new QueryResultMetaData(resultSet.getMetaData(), logicAndActualTables, shardingEncryptorEngine);
+        metaData = new QueryResultMetaData(resultSet.getMetaData(), shardingRule);
+    }
+    
+    @SneakyThrows
+    public StreamQueryResult(final ResultSet resultSet, final EncryptRule encryptRule) {
+        this.resultSet = resultSet;
+        metaData = new QueryResultMetaData(resultSet.getMetaData(), encryptRule);
     }
     
     @SneakyThrows
@@ -242,6 +247,10 @@ public final class StreamQueryResult implements QueryResult {
     @SneakyThrows
     private Object decrypt(final int columnIndex, final Object value) {
         Optional<ShardingEncryptor> shardingEncryptor = metaData.getShardingEncryptor(columnIndex);
-        return shardingEncryptor.isPresent() ? shardingEncryptor.get().decrypt(value.toString()) : value;
+        return shardingEncryptor.isPresent() ? shardingEncryptor.get().decrypt(getCiphertext(value)) : value;
+    }
+    
+    private String getCiphertext(final Object value) {
+        return null == value ? null : value.toString();
     }
 }

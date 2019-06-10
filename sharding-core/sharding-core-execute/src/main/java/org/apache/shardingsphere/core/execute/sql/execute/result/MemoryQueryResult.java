@@ -20,7 +20,8 @@ package org.apache.shardingsphere.core.execute.sql.execute.result;
 import com.google.common.base.Optional;
 import lombok.SneakyThrows;
 import org.apache.shardingsphere.core.execute.sql.execute.row.QueryRow;
-import org.apache.shardingsphere.core.strategy.encrypt.ShardingEncryptorEngine;
+import org.apache.shardingsphere.core.rule.EncryptRule;
+import org.apache.shardingsphere.core.rule.ShardingRule;
 import org.apache.shardingsphere.spi.encrypt.ShardingEncryptor;
 
 import java.io.ByteArrayInputStream;
@@ -34,7 +35,6 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Query result for memory loading.
@@ -50,10 +50,16 @@ public final class MemoryQueryResult implements QueryResult {
     
     private final QueryResultMetaData metaData;
     
-    @SneakyThrows 
-    public MemoryQueryResult(final ResultSet resultSet, final Map<String, Collection<String>> logicAndActualTables, final ShardingEncryptorEngine shardingEncryptorEngine) {
+    @SneakyThrows
+    public MemoryQueryResult(final ResultSet resultSet, final ShardingRule shardingRule) {
         resultData = getResultData(resultSet);
-        metaData = new QueryResultMetaData(resultSet.getMetaData(), logicAndActualTables, shardingEncryptorEngine);
+        metaData = new QueryResultMetaData(resultSet.getMetaData(), shardingRule);
+    }
+    
+    @SneakyThrows
+    public MemoryQueryResult(final ResultSet resultSet, final EncryptRule encryptRule) {
+        resultData = getResultData(resultSet);
+        metaData = new QueryResultMetaData(resultSet.getMetaData(), encryptRule);
     }
     
     @SneakyThrows
@@ -68,7 +74,7 @@ public final class MemoryQueryResult implements QueryResult {
         while (resultSet.next()) {
             List<Object> rowData = new ArrayList<>(resultSet.getMetaData().getColumnCount());
             for (int columnIndex = 1; columnIndex <= resultSet.getMetaData().getColumnCount(); columnIndex++) {
-                rowData.add(resultSet.getObject(columnIndex));
+                rowData.add(QueryResultUtil.getValue(resultSet, columnIndex));
             }
             result.add(new QueryRow(rowData));
         }
@@ -148,6 +154,10 @@ public final class MemoryQueryResult implements QueryResult {
     @SneakyThrows
     private Object decrypt(final int columnIndex, final Object value) {
         Optional<ShardingEncryptor> shardingEncryptor = metaData.getShardingEncryptor(columnIndex);
-        return shardingEncryptor.isPresent() ? shardingEncryptor.get().decrypt(value.toString()) : value;
+        return shardingEncryptor.isPresent() ? shardingEncryptor.get().decrypt(getCiphertext(value)) : value;
+    }
+    
+    private String getCiphertext(final Object value) {
+        return null == value ? null : value.toString();
     }
 }

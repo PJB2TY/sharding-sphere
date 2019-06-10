@@ -20,9 +20,11 @@ package org.apache.shardingsphere.shardingjdbc.jdbc.core.statement;
 import lombok.SneakyThrows;
 import org.apache.shardingsphere.core.optimize.OptimizeEngineFactory;
 import org.apache.shardingsphere.core.optimize.result.OptimizeResult;
-import org.apache.shardingsphere.core.parse.parser.sql.SQLStatement;
-import org.apache.shardingsphere.core.rewrite.EncryptSQLRewriteEngine;
-import org.apache.shardingsphere.core.rewrite.SQLBuilder;
+import org.apache.shardingsphere.core.parse.sql.statement.SQLStatement;
+import org.apache.shardingsphere.core.rewrite.SQLRewriteEngine;
+import org.apache.shardingsphere.core.rewrite.rewriter.parameter.ParameterRewriter;
+import org.apache.shardingsphere.core.rewrite.rewriter.sql.EncryptSQLRewriter;
+import org.apache.shardingsphere.core.rewrite.rewriter.sql.SQLRewriter;
 import org.apache.shardingsphere.shardingjdbc.jdbc.core.connection.EncryptConnection;
 import org.apache.shardingsphere.shardingjdbc.jdbc.core.resultset.EncryptResultSet;
 import org.apache.shardingsphere.shardingjdbc.jdbc.unsupported.AbstractUnsupportedOperationStatement;
@@ -32,7 +34,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLWarning;
 import java.sql.Statement;
-import java.util.LinkedList;
+import java.util.Collections;
 
 /**
  * Encrypt statement.
@@ -69,7 +71,7 @@ public final class EncryptStatement extends AbstractUnsupportedOperationStatemen
     public ResultSet executeQuery(final String sql) throws SQLException {
         ResultSet resultSet = statement.executeQuery(getRewriteSQL(sql));
         this.resultSet = new EncryptResultSet(this, resultSet, connection.getEncryptRule());
-        return resultSet;
+        return this.resultSet;
     }
     
     @Override
@@ -78,10 +80,12 @@ public final class EncryptStatement extends AbstractUnsupportedOperationStatemen
     }
     
     private String getRewriteSQL(final String sql) {
-        SQLStatement sqlStatement = connection.getEncryptSQLParsingEngine().parse(false, sql);
-        OptimizeResult optimizeResult = OptimizeEngineFactory.newInstance(connection.getEncryptRule(), sqlStatement, new LinkedList<>()).optimize();
-        SQLBuilder sqlBuilder = new EncryptSQLRewriteEngine(connection.getEncryptRule(), sql, connection.getDatabaseType(), sqlStatement, new LinkedList<>(), optimizeResult).rewrite();
-        return sqlBuilder.toSQL().getSql();
+        SQLStatement sqlStatement = connection.getParseEngine().parse(sql, false);
+        SQLRewriteEngine encryptSQLRewriteEngine = new SQLRewriteEngine(connection.getEncryptRule(), sqlStatement, Collections.emptyList());
+        OptimizeResult optimizeResult = OptimizeEngineFactory.newInstance(connection.getEncryptRule(), sqlStatement, Collections.emptyList()).optimize();
+        encryptSQLRewriteEngine.init(Collections.<ParameterRewriter>emptyList(), 
+                Collections.<SQLRewriter>singletonList(new EncryptSQLRewriter(connection.getEncryptRule().getEncryptorEngine(), sqlStatement, optimizeResult)));
+        return encryptSQLRewriteEngine.generateSQL().getSql();
     }
     
     @Override

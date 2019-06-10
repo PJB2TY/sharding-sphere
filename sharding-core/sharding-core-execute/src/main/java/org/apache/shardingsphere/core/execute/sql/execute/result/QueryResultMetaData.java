@@ -18,22 +18,17 @@
 package org.apache.shardingsphere.core.execute.sql.execute.result;
 
 import com.google.common.base.Optional;
-import com.google.common.base.Predicate;
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Multimap;
 import lombok.SneakyThrows;
+import org.apache.shardingsphere.core.rule.EncryptRule;
+import org.apache.shardingsphere.core.rule.ShardingRule;
+import org.apache.shardingsphere.core.rule.TableRule;
 import org.apache.shardingsphere.core.strategy.encrypt.ShardingEncryptorEngine;
-import org.apache.shardingsphere.core.strategy.encrypt.ShardingEncryptorStrategy;
 import org.apache.shardingsphere.spi.encrypt.ShardingEncryptor;
 
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Map;
-import java.util.Map.Entry;
+import java.util.TreeMap;
 
 /**
  * Query result meta data.
@@ -42,56 +37,45 @@ import java.util.Map.Entry;
  */
 public final class QueryResultMetaData {
     
-    private final Multimap<String, Integer> columnLabelAndIndexes;
+    private final Map<String, Integer> columnLabelAndIndexes;
     
     private final ResultSetMetaData resultSetMetaData;
     
-    private final Map<String, Collection<String>> logicAndActualTables;
+    private final ShardingRule shardingRule;
     
     private final ShardingEncryptorEngine shardingEncryptorEngine;
     
-    @SneakyThrows 
-    public QueryResultMetaData(final ResultSetMetaData resultSetMetaData, final Map<String, Collection<String>> logicAndActualTables, final ShardingEncryptorEngine shardingEncryptorEngine) {
+    @SneakyThrows
+    public QueryResultMetaData(final ResultSetMetaData resultSetMetaData, final ShardingRule shardingRule) {
         columnLabelAndIndexes = getColumnLabelAndIndexMap(resultSetMetaData);
         this.resultSetMetaData = resultSetMetaData;
-        this.logicAndActualTables = logicAndActualTables;
-        this.shardingEncryptorEngine = shardingEncryptorEngine;
+        this.shardingRule = shardingRule;
+        this.shardingEncryptorEngine = shardingRule.getEncryptRule().getEncryptorEngine();
+    }
+    
+    @SneakyThrows
+    public QueryResultMetaData(final ResultSetMetaData resultSetMetaData, final EncryptRule encryptRule) {
+        columnLabelAndIndexes = getColumnLabelAndIndexMap(resultSetMetaData);
+        this.resultSetMetaData = resultSetMetaData;
+        this.shardingRule = null;
+        this.shardingEncryptorEngine = encryptRule.getEncryptorEngine();
     }
     
     @SneakyThrows
     public QueryResultMetaData(final ResultSetMetaData resultSetMetaData) {
-        this(resultSetMetaData, Collections.<String, Collection<String>>emptyMap(), new ShardingEncryptorEngine(Collections.<String, ShardingEncryptorStrategy>emptyMap()));
+        columnLabelAndIndexes = getColumnLabelAndIndexMap(resultSetMetaData);
+        this.resultSetMetaData = resultSetMetaData;
+        this.shardingRule = null;
+        this.shardingEncryptorEngine = new ShardingEncryptorEngine();
     }
     
     @SneakyThrows
-    private Multimap<String, Integer> getColumnLabelAndIndexMap(final ResultSetMetaData resultSetMetaData) {
-        Multimap<String, Integer> result = HashMultimap.create();
-        for (int columnIndex = 1; columnIndex <= resultSetMetaData.getColumnCount(); columnIndex++) {
+    private Map<String, Integer> getColumnLabelAndIndexMap(final ResultSetMetaData resultSetMetaData) {
+        Map<String, Integer> result = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        for (int columnIndex = resultSetMetaData.getColumnCount(); columnIndex > 0; columnIndex--) {
             result.put(resultSetMetaData.getColumnLabel(columnIndex), columnIndex);
         }
         return result;
-    }
-    
-    /**
-     * Get table name.
-     *
-     * @param columnIndex column index
-     * @return column name
-     */
-    @SneakyThrows
-    private String getTableName(final int columnIndex) {
-        final String actualTableName = resultSetMetaData.getTableName(columnIndex);
-        if (logicAndActualTables.isEmpty()) {
-            return actualTableName;
-        }
-        Collection<String> logicTableNames = Maps.filterEntries(logicAndActualTables, new Predicate<Entry<String, Collection<String>>>() {
-            
-            @Override
-            public boolean apply(final Entry<String, Collection<String>> input) {
-                return input.getValue().contains(actualTableName);
-            }
-        }).keySet();
-        return logicTableNames.isEmpty() ? actualTableName : logicTableNames.iterator().next();
     }
     
     /**
@@ -99,8 +83,9 @@ public final class QueryResultMetaData {
      * 
      * @return column count
      */
+    @SneakyThrows
     public int getColumnCount() {
-        return columnLabelAndIndexes.size();
+        return resultSetMetaData.getColumnCount();
     }
     
     /**
@@ -111,12 +96,7 @@ public final class QueryResultMetaData {
      */
     @SneakyThrows
     public String getColumnLabel(final int columnIndex) {
-        for (Entry<String, Integer> entry : columnLabelAndIndexes.entries()) {
-            if (columnIndex == entry.getValue()) {
-                return entry.getKey();
-            }
-        }
-        throw new SQLException("Column index out of range", "9999");
+        return resultSetMetaData.getColumnLabel(columnIndex);
     }
     
     /**
@@ -137,7 +117,7 @@ public final class QueryResultMetaData {
      * @return column name
      */
     public Integer getColumnIndex(final String columnLabel) {
-        return new ArrayList<>(columnLabelAndIndexes.get(columnLabel)).get(0);
+        return columnLabelAndIndexes.get(columnLabel);
     }
     
     /**
@@ -148,9 +128,15 @@ public final class QueryResultMetaData {
      */
     @SneakyThrows
     public Optional<ShardingEncryptor> getShardingEncryptor(final int columnIndex) {
-        if (null == shardingEncryptorEngine) {
-            return Optional.absent();
-        }
         return shardingEncryptorEngine.getShardingEncryptor(getTableName(columnIndex), resultSetMetaData.getColumnName(columnIndex));
+    }
+    
+    private String getTableName(final int columnIndex) throws SQLException {
+        String actualTableName = resultSetMetaData.getTableName(columnIndex);
+        if (null == shardingRule) {
+            return actualTableName;
+        }
+        Optional<TableRule> tableRule = shardingRule.findTableRuleByActualTable(actualTableName);
+        return tableRule.isPresent() ? tableRule.get().getLogicTable() : actualTableName;
     }
 }

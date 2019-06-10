@@ -17,7 +17,7 @@
 
 package org.apache.shardingsphere.core.route.router.sharding;
 
-import org.apache.shardingsphere.core.parse.parser.sql.SQLStatement;
+import org.apache.shardingsphere.core.parse.sql.statement.SQLStatement;
 import org.apache.shardingsphere.core.route.SQLRouteResult;
 
 import java.util.List;
@@ -41,10 +41,9 @@ public interface ShardingRouter {
     /**
      * Route SQL.
      * 
-     * @param logicSQL logic SQL
      * @param sqlStatement SQL statement
      * @param parameters parameters
      * @return parse result
      */
-    SQLRouteResult route(String logicSQL, List<Object> parameters, SQLStatement sqlStatement);
+    SQLRouteResult route(SQLStatement sqlStatement, List<Object> parameters);
 }

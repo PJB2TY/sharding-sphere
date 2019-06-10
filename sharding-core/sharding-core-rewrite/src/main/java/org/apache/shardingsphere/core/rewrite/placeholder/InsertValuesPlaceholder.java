@@ -19,11 +19,11 @@ package org.apache.shardingsphere.core.rewrite.placeholder;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.apache.shardingsphere.core.optimize.result.InsertColumnValues.InsertColumnValue;
-import org.apache.shardingsphere.core.parse.lexer.token.DefaultKeyword;
+import org.apache.shardingsphere.core.route.type.RoutingUnit;
+import org.apache.shardingsphere.core.rule.DataNode;
 
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 
 /**
  * Insert values placeholder for rewrite.
@@ -33,13 +33,35 @@ import java.util.Set;
  */
 @RequiredArgsConstructor
 @Getter
-public final class InsertValuesPlaceholder implements ShardingPlaceholder {
+public final class InsertValuesPlaceholder implements ShardingPlaceholder, Alterable {
     
-    private final String logicTableName;
+    private final List<InsertValuePlaceholder> insertValues;
     
-    private final DefaultKeyword type;
+    @Override
+    public String toString(final RoutingUnit routingUnit, final Map<String, String> logicAndActualTables) {
+        StringBuilder result = new StringBuilder();
+        appendUnits(routingUnit, result);
+        result.delete(result.length() - 2, result.length());
+        return result.toString();
+    }
     
-    private final Set<String> columnNames;
+    private void appendUnits(final RoutingUnit routingUnit, final StringBuilder result) {
+        for (InsertValuePlaceholder each : insertValues) {
+            if (isToAppendInsertOptimizeResult(routingUnit, each)) {
+                result.append(each).append(", ");
+            }
+        }
+    }
     
-    private final List<InsertColumnValue> columnValues;
+    private boolean isToAppendInsertOptimizeResult(final RoutingUnit routingUnit, final InsertValuePlaceholder unit) {
+        if (unit.getDataNodes().isEmpty() || null == routingUnit) {
+            return true;
+        }
+        for (DataNode each : unit.getDataNodes()) {
+            if (routingUnit.getTableUnit(each.getDataSourceName(), each.getTableName()).isPresent()) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

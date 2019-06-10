@@ -19,9 +19,8 @@ package org.apache.shardingsphere.core.route.type.broadcast;
 
 import org.apache.shardingsphere.api.config.sharding.ShardingRuleConfiguration;
 import org.apache.shardingsphere.api.config.sharding.TableRuleConfiguration;
-import org.apache.shardingsphere.core.parse.antlr.sql.statement.ddl.DDLStatement;
-import org.apache.shardingsphere.core.parse.parser.sql.dql.DQLStatement;
-import org.apache.shardingsphere.core.parse.parser.token.IndexToken;
+import org.apache.shardingsphere.core.parse.sql.statement.ddl.DDLStatement;
+import org.apache.shardingsphere.core.parse.sql.statement.dml.DQLStatement;
 import org.apache.shardingsphere.core.route.type.RoutingResult;
 import org.apache.shardingsphere.core.rule.ShardingRule;
 import org.junit.Before;
@@ -60,7 +59,7 @@ public final class TableBroadcastRoutingEngineTest {
     @Test
     public void assertTableUnitsForDQLStatement() {
         RoutingResult routingResult = createDQLStatementRoutingResult();
-        assertThat(routingResult.getTableUnits().getTableUnits().size(), is(0));
+        assertThat(routingResult.getRoutingUnits().size(), is(0));
     }
     
     @Test
@@ -76,19 +75,17 @@ public final class TableBroadcastRoutingEngineTest {
     @Test
     public void assertTableUnitsForDDLStatement() {
         RoutingResult routingResult = createDDLStatementRoutingResult();
-        assertThat(routingResult.getTableUnits().getTableUnits().size(), is(6));
+        assertThat(routingResult.getRoutingUnits().size(), is(6));
     }
     
     private RoutingResult createDQLStatementRoutingResult() {
-        TableBroadcastRoutingEngine tableBroadcastRoutingEngine = new TableBroadcastRoutingEngine(shardingRule, new DQLStatement());
-        return tableBroadcastRoutingEngine.route();
+        return new TableBroadcastRoutingEngine(shardingRule, new DQLStatement()).route();
     }
     
     private RoutingResult createDDLStatementRoutingResult() {
         DDLStatement ddlStatement = new DDLStatement();
         ddlStatement.setLogicSQL("CREATE INDEX t_order_index on t_order");
-        ddlStatement.addSQLToken(new IndexToken(13, 25, "t_order"));
-        TableBroadcastRoutingEngine tableBroadcastRoutingEngine = new TableBroadcastRoutingEngine(shardingRule, ddlStatement);
-        return tableBroadcastRoutingEngine.route();
+        ddlStatement.setIndexName("t_order_index");
+        return new TableBroadcastRoutingEngine(shardingRule, ddlStatement).route();
     }
 }

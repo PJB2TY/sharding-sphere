@@ -22,7 +22,6 @@ import com.google.common.collect.Lists;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.shardingsphere.core.constant.DatabaseType;
 import org.apache.shardingsphere.core.constant.properties.ShardingProperties;
 import org.apache.shardingsphere.core.constant.properties.ShardingPropertiesConstant;
 import org.apache.shardingsphere.core.execute.ShardingExecuteEngine;
@@ -32,13 +31,14 @@ import org.apache.shardingsphere.core.execute.metadata.TableMetaDataInitializer;
 import org.apache.shardingsphere.core.execute.sql.execute.SQLExecuteCallback;
 import org.apache.shardingsphere.core.execute.sql.execute.SQLExecuteTemplate;
 import org.apache.shardingsphere.core.execute.sql.prepare.SQLExecutePrepareTemplate;
-import org.apache.shardingsphere.core.parse.antlr.sql.statement.ddl.AlterTableStatement;
-import org.apache.shardingsphere.core.parse.antlr.sql.statement.ddl.CreateTableStatement;
-import org.apache.shardingsphere.core.parse.antlr.sql.statement.ddl.DropTableStatement;
-import org.apache.shardingsphere.core.parse.parser.sql.SQLStatement;
+import org.apache.shardingsphere.core.parse.sql.statement.SQLStatement;
+import org.apache.shardingsphere.core.parse.sql.statement.ddl.AlterTableStatement;
+import org.apache.shardingsphere.core.parse.sql.statement.ddl.CreateTableStatement;
+import org.apache.shardingsphere.core.parse.sql.statement.ddl.DropTableStatement;
 import org.apache.shardingsphere.shardingjdbc.jdbc.core.ShardingContext;
 import org.apache.shardingsphere.shardingjdbc.jdbc.core.connection.ShardingConnection;
 import org.apache.shardingsphere.shardingjdbc.jdbc.metadata.JDBCTableMetaDataConnectionManager;
+import org.apache.shardingsphere.spi.DbType;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -58,7 +58,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @Getter(AccessLevel.PROTECTED)
 public class AbstractStatementExecutor {
     
-    private final DatabaseType databaseType;
+    private final DbType databaseType;
     
     @Getter
     private final int resultSetType;

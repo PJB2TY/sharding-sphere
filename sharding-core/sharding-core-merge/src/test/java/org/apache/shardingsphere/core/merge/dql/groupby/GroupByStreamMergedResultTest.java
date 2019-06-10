@@ -20,15 +20,19 @@ package org.apache.shardingsphere.core.merge.dql.groupby;
 import com.google.common.base.Optional;
 import com.google.common.collect.Lists;
 import org.apache.shardingsphere.core.constant.AggregationType;
-import org.apache.shardingsphere.core.constant.DatabaseType;
 import org.apache.shardingsphere.core.constant.OrderDirection;
 import org.apache.shardingsphere.core.execute.sql.execute.result.QueryResult;
 import org.apache.shardingsphere.core.merge.MergedResult;
 import org.apache.shardingsphere.core.merge.dql.DQLMergeEngine;
 import org.apache.shardingsphere.core.merge.fixture.TestQueryResult;
-import org.apache.shardingsphere.core.parse.parser.context.orderby.OrderItem;
-import org.apache.shardingsphere.core.parse.parser.context.selectitem.AggregationSelectItem;
-import org.apache.shardingsphere.core.parse.parser.sql.dql.select.SelectStatement;
+import org.apache.shardingsphere.core.optimize.condition.ShardingCondition;
+import org.apache.shardingsphere.core.optimize.condition.ShardingConditions;
+import org.apache.shardingsphere.core.optimize.result.OptimizeResult;
+import org.apache.shardingsphere.core.parse.sql.context.selectitem.AggregationSelectItem;
+import org.apache.shardingsphere.core.parse.sql.segment.dml.order.item.IndexOrderByItemSegment;
+import org.apache.shardingsphere.core.parse.sql.statement.dml.SelectStatement;
+import org.apache.shardingsphere.core.route.SQLRouteResult;
+import org.apache.shardingsphere.spi.DatabaseTypes;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -38,6 +42,7 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
@@ -56,7 +61,7 @@ public final class GroupByStreamMergedResultTest {
     
     private List<QueryResult> queryResults;
     
-    private SelectStatement selectStatement;
+    private SQLRouteResult routeResult;
     
     @Before
     public void setUp() throws SQLException {
@@ -65,7 +70,6 @@ public final class GroupByStreamMergedResultTest {
         for (ResultSet each : resultSets) {
             queryResults.add(new TestQueryResult(each));
         }
-        selectStatement = new SelectStatement();
         AggregationSelectItem aggregationSelectItem1 = new AggregationSelectItem(AggregationType.COUNT, "(*)", Optional.<String>absent());
         aggregationSelectItem1.setIndex(1);
         AggregationSelectItem aggregationSelectItem2 = new AggregationSelectItem(AggregationType.AVG, "(num)", Optional.<String>absent());
@@ -76,10 +80,13 @@ public final class GroupByStreamMergedResultTest {
         AggregationSelectItem derivedAggregationSelectItem2 = new AggregationSelectItem(AggregationType.SUM, "(num)", Optional.of("AVG_DERIVED_SUM_0"));
         aggregationSelectItem2.setIndex(6);
         aggregationSelectItem2.getDerivedAggregationSelectItems().add(derivedAggregationSelectItem2);
+        SelectStatement selectStatement = new SelectStatement();
         selectStatement.getItems().add(aggregationSelectItem1);
         selectStatement.getItems().add(aggregationSelectItem2);
-        selectStatement.getGroupByItems().add(new OrderItem(3, OrderDirection.ASC, OrderDirection.ASC));
-        selectStatement.getOrderByItems().add(new OrderItem(3, OrderDirection.ASC, OrderDirection.ASC));
+        selectStatement.getGroupByItems().add(new IndexOrderByItemSegment(0, 0, 3, OrderDirection.ASC, OrderDirection.ASC));
+        selectStatement.getOrderByItems().add(new IndexOrderByItemSegment(0, 0, 3, OrderDirection.ASC, OrderDirection.ASC));
+        routeResult = new SQLRouteResult(selectStatement);
+        routeResult.setOptimizeResult(new OptimizeResult(new ShardingConditions(Collections.<ShardingCondition>emptyList())));
     }
     
     private ResultSet mockResultSet() throws SQLException {
@@ -98,14 +105,14 @@ public final class GroupByStreamMergedResultTest {
     
     @Test
     public void assertNextForResultSetsAllEmpty() throws SQLException {
-        mergeEngine = new DQLMergeEngine(DatabaseType.MySQL, selectStatement, queryResults);
+        mergeEngine = new DQLMergeEngine(DatabaseTypes.getActualDatabaseType("MySQL"), routeResult, queryResults);
         MergedResult actual = mergeEngine.merge();
         assertFalse(actual.next());
     }
     
     @Test
     public void assertNextForSomeResultSetsEmpty() throws SQLException {
-        mergeEngine = new DQLMergeEngine(DatabaseType.MySQL, selectStatement, queryResults);
+        mergeEngine = new DQLMergeEngine(DatabaseTypes.getActualDatabaseType("MySQL"), routeResult, queryResults);
         when(resultSets.get(0).next()).thenReturn(true, false);
         when(resultSets.get(0).getObject(1)).thenReturn(20);
         when(resultSets.get(0).getObject(2)).thenReturn(0);
@@ -147,7 +154,7 @@ public final class GroupByStreamMergedResultTest {
     
     @Test
     public void assertNextForMix() throws SQLException {
-        mergeEngine = new DQLMergeEngine(DatabaseType.MySQL, selectStatement, queryResults);
+        mergeEngine = new DQLMergeEngine(DatabaseTypes.getActualDatabaseType("MySQL"), routeResult, queryResults);
         when(resultSets.get(0).next()).thenReturn(true, false);
         when(resultSets.get(0).getObject(1)).thenReturn(20);
         when(resultSets.get(0).getObject(2)).thenReturn(0);

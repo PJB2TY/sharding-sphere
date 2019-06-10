@@ -18,10 +18,14 @@
 package org.apache.shardingsphere.core.optimize.result;
 
 import com.google.common.base.Optional;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import org.apache.shardingsphere.core.optimize.condition.ShardingCondition;
 import org.apache.shardingsphere.core.optimize.condition.ShardingConditions;
+import org.apache.shardingsphere.core.optimize.pagination.Pagination;
+import org.apache.shardingsphere.core.optimize.result.insert.InsertOptimizeResult;
 
 import java.util.Collections;
 
@@ -31,27 +35,31 @@ import java.util.Collections;
  * @author panjuan
  */
 @RequiredArgsConstructor
+@Getter
+@Setter
 public final class OptimizeResult {
     
-    @Getter
     private final ShardingConditions shardingConditions;
     
-    private final InsertColumnValues insertColumnValues;
+    @Getter(AccessLevel.NONE)
+    private final InsertOptimizeResult insertOptimizeResult;
+    
+    private Pagination pagination;
     
     public OptimizeResult(final ShardingConditions shardingConditions) {
         this(shardingConditions, null);
     }
     
-    public OptimizeResult(final InsertColumnValues insertColumnValues) {
-        this(new ShardingConditions(Collections.<ShardingCondition>emptyList()), insertColumnValues);
+    public OptimizeResult(final InsertOptimizeResult insertOptimizeResult) {
+        this(new ShardingConditions(Collections.<ShardingCondition>emptyList()), insertOptimizeResult);
     }
     
     /**
-     * Get insert column values.
+     * Get insert optimize result.
      * 
-     * @return insert column values optional
+     * @return insert optimize result
      */
-    public Optional<InsertColumnValues> getInsertColumnValues() {
-        return null == insertColumnValues ? Optional.<InsertColumnValues>absent() : Optional.of(insertColumnValues);
+    public Optional<InsertOptimizeResult> getInsertOptimizeResult() {
+        return Optional.fromNullable(insertOptimizeResult);
     }
 }

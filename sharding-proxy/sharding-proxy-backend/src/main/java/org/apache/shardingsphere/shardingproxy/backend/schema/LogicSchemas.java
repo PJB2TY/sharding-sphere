@@ -22,15 +22,16 @@ import com.google.common.eventbus.Subscribe;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.shardingsphere.api.config.RuleConfiguration;
+import org.apache.shardingsphere.api.config.encryptor.EncryptRuleConfiguration;
 import org.apache.shardingsphere.api.config.masterslave.MasterSlaveRuleConfiguration;
 import org.apache.shardingsphere.api.config.sharding.ShardingRuleConfiguration;
-import org.apache.shardingsphere.core.constant.DatabaseType;
 import org.apache.shardingsphere.orchestration.internal.eventbus.ShardingOrchestrationEventBus;
 import org.apache.shardingsphere.orchestration.internal.registry.config.event.SchemaAddedEvent;
 import org.apache.shardingsphere.orchestration.internal.registry.config.event.SchemaDeletedEvent;
 import org.apache.shardingsphere.shardingproxy.backend.communication.jdbc.recognizer.JDBCDriverURLRecognizerEngine;
 import org.apache.shardingsphere.shardingproxy.config.yaml.YamlDataSourceParameter;
 import org.apache.shardingsphere.shardingproxy.util.DataSourceConverter;
+import org.apache.shardingsphere.spi.DbType;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -54,7 +55,7 @@ public final class LogicSchemas {
     
     private final Map<String, LogicSchema> logicSchemas = new ConcurrentHashMap<>();
     
-    private DatabaseType databaseType;
+    private DbType databaseType;
     
     private LogicSchemas() {
         ShardingOrchestrationEventBus.getInstance().register(this);
@@ -95,6 +96,9 @@ public final class LogicSchemas {
     
     private void initSchemas(final Collection<String> localSchemaNames, 
                              final Map<String, Map<String, YamlDataSourceParameter>> schemaDataSources, final Map<String, RuleConfiguration> schemaRules, final boolean isUsingRegistry) {
+        if (schemaRules.isEmpty()) {
+            logicSchemas.put(schemaDataSources.keySet().iterator().next(), createLogicSchema(schemaDataSources.keySet().iterator().next(), schemaDataSources, null, isUsingRegistry));
+        }
         for (Entry<String, RuleConfiguration> entry : schemaRules.entrySet()) {
             if (localSchemaNames.isEmpty() || localSchemaNames.contains(entry.getKey())) {
                 logicSchemas.put(entry.getKey(), createLogicSchema(entry.getKey(), schemaDataSources, entry.getValue(), isUsingRegistry));
@@ -106,9 +110,15 @@ public final class LogicSchemas {
             final String schemaName, final Map<String, Map<String, YamlDataSourceParameter>> schemaDataSources, final RuleConfiguration ruleConfiguration, final boolean isUsingRegistry) {
         LogicSchema result;
         try {
-            result = ruleConfiguration instanceof ShardingRuleConfiguration
-                    ? new ShardingSchema(schemaName, schemaDataSources.get(schemaName), (ShardingRuleConfiguration) ruleConfiguration, isUsingRegistry)
-                    : new MasterSlaveSchema(schemaName, schemaDataSources.get(schemaName), (MasterSlaveRuleConfiguration) ruleConfiguration, isUsingRegistry);
+            if (ruleConfiguration instanceof ShardingRuleConfiguration) {
+                result = new ShardingSchema(schemaName, schemaDataSources.get(schemaName), (ShardingRuleConfiguration) ruleConfiguration, isUsingRegistry);
+            } else if (ruleConfiguration instanceof MasterSlaveRuleConfiguration) {
+                result = new MasterSlaveSchema(schemaName, schemaDataSources.get(schemaName), (MasterSlaveRuleConfiguration) ruleConfiguration, isUsingRegistry);
+            } else if (ruleConfiguration instanceof EncryptRuleConfiguration) {
+                result = new EncryptSchema(schemaName, schemaDataSources.get(schemaName), (EncryptRuleConfiguration) ruleConfiguration);
+            } else {
+                result = new TransparentSchema(schemaName, schemaDataSources.get(schemaName));
+            }
         } catch (final Exception ex) {
             log.error("Exception occur when create schema {}.\nThe exception detail is {}.", schemaName, ex.getMessage());
             throw ex;

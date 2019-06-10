@@ -23,12 +23,14 @@ import org.apache.shardingsphere.api.config.sharding.TableRuleConfiguration;
 import org.apache.shardingsphere.api.config.sharding.strategy.HintShardingStrategyConfiguration;
 import org.apache.shardingsphere.api.config.sharding.strategy.InlineShardingStrategyConfiguration;
 import org.apache.shardingsphere.api.hint.HintManager;
-import org.apache.shardingsphere.core.constant.DatabaseType;
 import org.apache.shardingsphere.core.metadata.ShardingMetaData;
+import org.apache.shardingsphere.core.metadata.table.ShardingTableMetaData;
 import org.apache.shardingsphere.core.parse.cache.ParsingResultCache;
-import org.apache.shardingsphere.core.parse.parser.sql.dql.select.SelectStatement;
+import org.apache.shardingsphere.core.parse.sql.segment.dml.pagination.limit.NumberLiteralLimitValueSegment;
+import org.apache.shardingsphere.core.parse.sql.statement.dml.SelectStatement;
 import org.apache.shardingsphere.core.route.fixture.HintShardingAlgorithmFixture;
 import org.apache.shardingsphere.core.rule.ShardingRule;
+import org.apache.shardingsphere.spi.DatabaseTypes;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -40,8 +42,10 @@ import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public final class DatabaseTest {
     
@@ -74,30 +78,34 @@ public final class DatabaseTest {
     @Test
     public void assertDatabaseAllRoutingSQL() {
         String originSQL = "select * from tesT";
-        SQLRouteResult actual = new StatementRoutingEngine(shardingRule, mock(ShardingMetaData.class), DatabaseType.MySQL, new ParsingResultCache()).route(originSQL);
-        assertThat(actual.getRoutingResult().getTableUnits().getTableUnits().size(), is(1));
-        Collection<String> actualDataSources = actual.getRoutingResult().getTableUnits().getDataSourceNames();
+        SQLRouteResult actual = new StatementRoutingEngine(shardingRule, mock(ShardingMetaData.class), DatabaseTypes.getActualDatabaseType("MySQL"), new ParsingResultCache()).route(originSQL);
+        assertThat(actual.getRoutingResult().getRoutingUnits().size(), is(1));
+        Collection<String> actualDataSources = actual.getRoutingResult().getDataSourceNames();
         assertThat(actualDataSources.size(), is(1));
     }
     
     @Test
     public void assertDatabaseSelectSQLPagination() {
         String originSQL = "select user_id from tbl_pagination limit 0,5";
-        SQLRouteResult actual = new StatementRoutingEngine(shardingRule, mock(ShardingMetaData.class), DatabaseType.MySQL, new ParsingResultCache()).route(originSQL);
-        SelectStatement stmt = (SelectStatement) actual.getSqlStatement();
-        assertThat(stmt.getLimit().getOffsetValue(), is(0));
-        assertThat(stmt.getLimit().getRowCountValue(), is(5));
+        SQLRouteResult actual = new StatementRoutingEngine(shardingRule, mock(ShardingMetaData.class), DatabaseTypes.getActualDatabaseType("MySQL"), new ParsingResultCache()).route(originSQL);
+        SelectStatement selectStatement = (SelectStatement) actual.getSqlStatement();
+        assertNotNull(selectStatement.getOffset());
+        assertThat(((NumberLiteralLimitValueSegment) selectStatement.getOffset()).getValue(), is(0));
+        assertNotNull(selectStatement.getRowCount());
+        assertThat(((NumberLiteralLimitValueSegment) selectStatement.getRowCount()).getValue(), is(5));
         originSQL = "select user_id from tbl_pagination limit 5,5";
-        actual = new StatementRoutingEngine(shardingRule, mock(ShardingMetaData.class), DatabaseType.MySQL, new ParsingResultCache()).route(originSQL);
-        stmt = (SelectStatement) actual.getSqlStatement();
-        assertThat(stmt.getLimit().getOffsetValue(), is(5));
-        assertThat(stmt.getLimit().getRowCountValue(), is(5));
+        actual = new StatementRoutingEngine(shardingRule, mock(ShardingMetaData.class), DatabaseTypes.getActualDatabaseType("MySQL"), new ParsingResultCache()).route(originSQL);
+        selectStatement = (SelectStatement) actual.getSqlStatement();
+        assertNotNull(selectStatement.getOffset());
+        assertThat(((NumberLiteralLimitValueSegment) selectStatement.getOffset()).getValue(), is(5));
+        assertNotNull(selectStatement.getRowCount());
+        assertThat(((NumberLiteralLimitValueSegment) selectStatement.getRowCount()).getValue(), is(5));
     }
     
     @Test
     public void assertDatabasePrepareSelectSQLPagination() {
         String shardingPrefix = "user_db";
-        String shardingTable = "user";
+        String shardingTable = "t_user";
         Map<String, DataSource> dataSourceMap = new HashMap<>();
         dataSourceMap.put(shardingPrefix + "1", null);
         dataSourceMap.put(shardingPrefix + "2", null);
@@ -106,24 +114,31 @@ public final class DatabaseTest {
         ShardingRuleConfiguration shardingRuleConfig = new ShardingRuleConfiguration();
         shardingRuleConfig.getTableRuleConfigs().add(tableRuleConfig);
         ShardingRule rule = new ShardingRule(shardingRuleConfig, dataSourceMap.keySet());
-        String originSQL = "select city_id from user where city_id in (?,?) limit 5,10";
+        String originSQL = "select city_id from t_user where city_id in (?,?) limit 5,10";
+        ShardingMetaData shardingMetaData = mock(ShardingMetaData.class);
+        when(shardingMetaData.getTable()).thenReturn(mock(ShardingTableMetaData.class));
         SQLRouteResult actual = new PreparedStatementRoutingEngine(
-                originSQL, rule, mock(ShardingMetaData.class), DatabaseType.MySQL, new ParsingResultCache()).route(Lists.<Object>newArrayList(13, 173));
+                originSQL, rule, shardingMetaData, DatabaseTypes.getActualDatabaseType("MySQL"), new ParsingResultCache()).route(Lists.<Object>newArrayList(13, 173));
         SelectStatement selectStatement = (SelectStatement) actual.getSqlStatement();
-        assertThat(selectStatement.getLimit().getOffsetValue(), is(5));
-        assertThat(selectStatement.getLimit().getRowCountValue(), is(10));
-        assertThat(actual.getRoutingResult().getTableUnits().getTableUnits().size(), is(1));
-        originSQL = "select city_id from user where city_id in (?,?) limit 5,10";
-        actual = new PreparedStatementRoutingEngine(originSQL, rule, mock(ShardingMetaData.class), DatabaseType.MySQL, new ParsingResultCache()).route(Lists.<Object>newArrayList(89, 84));
+        assertNotNull(selectStatement.getOffset());
+        assertThat(((NumberLiteralLimitValueSegment) selectStatement.getOffset()).getValue(), is(5));
+        assertNotNull(selectStatement.getRowCount());
+        assertThat(((NumberLiteralLimitValueSegment) selectStatement.getRowCount()).getValue(), is(10));
+        assertThat(actual.getRoutingResult().getRoutingUnits().size(), is(1));
+        originSQL = "select city_id from t_user where city_id in (?,?) limit 5,10";
+        actual = new PreparedStatementRoutingEngine(
+                originSQL, rule, shardingMetaData, DatabaseTypes.getActualDatabaseType("MySQL"), new ParsingResultCache()).route(Lists.<Object>newArrayList(89, 84));
         selectStatement = (SelectStatement) actual.getSqlStatement();
-        assertThat(selectStatement.getLimit().getOffsetValue(), is(5));
-        assertThat(selectStatement.getLimit().getRowCountValue(), is(10));
-        assertThat(actual.getRoutingResult().getTableUnits().getTableUnits().size(), is(2));
+        assertNotNull(selectStatement.getOffset());
+        assertThat(((NumberLiteralLimitValueSegment) selectStatement.getOffset()).getValue(), is(5));
+        assertNotNull(selectStatement.getRowCount());
+        assertThat(((NumberLiteralLimitValueSegment) selectStatement.getRowCount()).getValue(), is(10));
+        assertThat(actual.getRoutingResult().getRoutingUnits().size(), is(2));
     }
     
-    private void assertTarget(final String originSql, final String targetDataSource) {
-        SQLRouteResult actual = new StatementRoutingEngine(shardingRule, mock(ShardingMetaData.class), DatabaseType.MySQL, new ParsingResultCache()).route(originSql);
-        assertThat(actual.getRoutingResult().getTableUnits().getTableUnits().size(), is(1));
-        assertThat(actual.getRoutingResult().getTableUnits().getDataSourceNames(), hasItems(targetDataSource));
+    private void assertTarget(final String originalSQL, final String targetDataSource) {
+        SQLRouteResult actual = new StatementRoutingEngine(shardingRule, mock(ShardingMetaData.class), DatabaseTypes.getActualDatabaseType("MySQL"), new ParsingResultCache()).route(originalSQL);
+        assertThat(actual.getRoutingResult().getRoutingUnits().size(), is(1));
+        assertThat(actual.getRoutingResult().getDataSourceNames(), hasItems(targetDataSource));
     }
 }

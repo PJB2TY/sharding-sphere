@@ -21,14 +21,15 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.SneakyThrows;
 import org.apache.shardingsphere.api.config.encryptor.EncryptRuleConfiguration;
-import org.apache.shardingsphere.core.constant.DatabaseType;
 import org.apache.shardingsphere.core.metadata.table.ColumnMetaData;
 import org.apache.shardingsphere.core.metadata.table.ShardingTableMetaData;
 import org.apache.shardingsphere.core.metadata.table.TableMetaData;
-import org.apache.shardingsphere.core.parse.EncryptSQLParsingEngine;
+import org.apache.shardingsphere.core.parse.entry.EncryptSQLParseEntry;
 import org.apache.shardingsphere.core.rule.EncryptRule;
 import org.apache.shardingsphere.shardingjdbc.jdbc.core.connection.EncryptConnection;
 import org.apache.shardingsphere.shardingjdbc.jdbc.unsupported.AbstractUnsupportedOperationDataSource;
+import org.apache.shardingsphere.spi.DatabaseTypes;
+import org.apache.shardingsphere.spi.DbType;
 
 import javax.sql.DataSource;
 import java.io.PrintWriter;
@@ -50,15 +51,15 @@ import java.util.logging.Logger;
  * @author panjuan
  */
 @Getter
-public final class EncryptDataSource extends AbstractUnsupportedOperationDataSource implements AutoCloseable {
-
+public class EncryptDataSource extends AbstractUnsupportedOperationDataSource implements AutoCloseable {
+    
     private final DataSource dataSource;
+    
+    private final DbType databaseType;
     
     private final EncryptRule encryptRule;
     
-    private final DatabaseType databaseType;
-    
-    private final EncryptSQLParsingEngine encryptSQLParsingEngine;
+    private final EncryptSQLParseEntry parseEngine;
     
     @Setter
     private PrintWriter logWriter = new PrintWriter(System.out);
@@ -66,9 +67,9 @@ public final class EncryptDataSource extends AbstractUnsupportedOperationDataSou
     @SneakyThrows
     public EncryptDataSource(final DataSource dataSource, final EncryptRuleConfiguration encryptRuleConfiguration) {
         this.dataSource = dataSource;
-        encryptRule = new EncryptRule(encryptRuleConfiguration);
         databaseType = getDatabaseType();
-        encryptSQLParsingEngine = new EncryptSQLParsingEngine(databaseType, encryptRule, createEncryptTableMetaData());
+        encryptRule = new EncryptRule(encryptRuleConfiguration);
+        parseEngine = new EncryptSQLParseEntry(databaseType, encryptRule, createEncryptTableMetaData());
     }
     
     @SneakyThrows
@@ -113,16 +114,16 @@ public final class EncryptDataSource extends AbstractUnsupportedOperationDataSou
         return result;
     }
     
-    private DatabaseType getDatabaseType() throws SQLException {
+    private DbType getDatabaseType() throws SQLException {
         try (Connection connection = dataSource.getConnection()) {
-            return DatabaseType.valueFrom(connection.getMetaData().getDatabaseProductName());
+            return DatabaseTypes.getActualDatabaseTypeByProductName(connection.getMetaData().getDatabaseProductName());
         }
     }
 
     @Override
     @SneakyThrows
     public EncryptConnection getConnection() {
-        return new EncryptConnection(dataSource.getConnection(), encryptRule, databaseType, encryptSQLParsingEngine);
+        return new EncryptConnection(databaseType, dataSource.getConnection(), encryptRule, parseEngine);
     }
     
     @Override

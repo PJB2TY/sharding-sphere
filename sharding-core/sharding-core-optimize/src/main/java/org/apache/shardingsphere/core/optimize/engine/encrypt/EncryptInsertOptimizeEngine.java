@@ -20,17 +20,16 @@ package org.apache.shardingsphere.core.optimize.engine.encrypt;
 import com.google.common.base.Optional;
 import lombok.RequiredArgsConstructor;
 import org.apache.shardingsphere.core.optimize.engine.OptimizeEngine;
-import org.apache.shardingsphere.core.optimize.result.InsertColumnValues;
-import org.apache.shardingsphere.core.optimize.result.InsertColumnValues.InsertColumnValue;
 import org.apache.shardingsphere.core.optimize.result.OptimizeResult;
-import org.apache.shardingsphere.core.parse.parser.context.insertvalue.InsertValue;
-import org.apache.shardingsphere.core.parse.parser.expression.SQLNumberExpression;
-import org.apache.shardingsphere.core.parse.parser.expression.SQLPlaceholderExpression;
-import org.apache.shardingsphere.core.parse.parser.expression.SQLTextExpression;
-import org.apache.shardingsphere.core.parse.parser.sql.dml.insert.InsertStatement;
+import org.apache.shardingsphere.core.optimize.result.insert.InsertOptimizeResult;
+import org.apache.shardingsphere.core.optimize.result.insert.InsertOptimizeResultUnit;
+import org.apache.shardingsphere.core.parse.sql.context.insertvalue.InsertValue;
+import org.apache.shardingsphere.core.parse.sql.segment.dml.expr.ExpressionSegment;
+import org.apache.shardingsphere.core.parse.sql.segment.dml.expr.simple.LiteralExpressionSegment;
+import org.apache.shardingsphere.core.parse.sql.segment.dml.expr.simple.ParameterMarkerExpressionSegment;
+import org.apache.shardingsphere.core.parse.sql.statement.dml.InsertStatement;
 import org.apache.shardingsphere.core.rule.EncryptRule;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
@@ -51,31 +50,43 @@ public final class EncryptInsertOptimizeEngine implements OptimizeEngine {
     
     @Override
     public OptimizeResult optimize() {
-        List<InsertValue> insertValues = insertStatement.getInsertValues().getInsertValues();
-        InsertColumnValues insertColumnValues = createInsertColumnValues();
+        List<InsertValue> insertValues = insertStatement.getValues();
+        InsertOptimizeResult insertOptimizeResult = new InsertOptimizeResult(insertStatement.getColumnNames());
         int parametersCount = 0;
-        for (int i = 0; i < insertValues.size(); i++) {
-            InsertValue insertValue = insertValues.get(i);
-            List<Object> currentParameters = new ArrayList<>(insertValue.getParametersCount() + 1);
-            if (0 != insertValue.getParametersCount()) {
-                currentParameters = getCurrentParameters(parametersCount, insertValue.getParametersCount());
-                parametersCount = parametersCount + insertValue.getParametersCount();
-            }
-            insertColumnValues.addInsertColumnValue(insertValue.getColumnValues(), currentParameters);
+        int insertOptimizeResultIndex = 0;
+        for (InsertValue each : insertValues) {
+            ExpressionSegment[] currentColumnValues = createCurrentColumnValues(each);
+            Object[] currentParameters = createCurrentParameters(parametersCount, each);
+            parametersCount = parametersCount + each.getParametersCount();
+            insertOptimizeResult.addUnit(currentColumnValues, currentParameters, each.getParametersCount());
             if (isNeededToAppendQueryAssistedColumn()) {
-                fillWithQueryAssistedColumn(insertColumnValues, i);
+                fillWithQueryAssistedColumn(insertOptimizeResult, insertOptimizeResultIndex);
             }
+            insertOptimizeResultIndex++;
         }
-        return new OptimizeResult(insertColumnValues);
+        return new OptimizeResult(insertOptimizeResult);
     }
     
-    private InsertColumnValues createInsertColumnValues() {
-        return new InsertColumnValues(insertStatement.getInsertValuesToken().getType(), insertStatement.getInsertColumnNames());
+    private ExpressionSegment[] createCurrentColumnValues(final InsertValue insertValue) {
+        ExpressionSegment[] result = new ExpressionSegment[insertValue.getAssignments().size() + getIncrement()];
+        insertValue.getAssignments().toArray(result);
+        return result;
     }
     
-    private List<Object> getCurrentParameters(final int beginCount, final int increment) {
-        List<Object> result = new ArrayList<>(increment + 1);
-        result.addAll(parameters.subList(beginCount, beginCount + increment));
+    private Object[] createCurrentParameters(final int beginIndex, final InsertValue insertValue) {
+        if (0 == insertValue.getParametersCount()) {
+            return new Object[0];
+        }
+        Object[] result = new Object[insertValue.getParametersCount() + getIncrement()];
+        parameters.subList(beginIndex, beginIndex + insertValue.getParametersCount()).toArray(result);
+        return result;
+    }
+    
+    private int getIncrement() {
+        int result = 0;
+        if (isNeededToAppendQueryAssistedColumn()) {
+            result += encryptRule.getEncryptorEngine().getAssistedQueryColumnCount(insertStatement.getTables().getSingleTableName());
+        }
         return result;
     }
     
@@ -83,29 +94,29 @@ public final class EncryptInsertOptimizeEngine implements OptimizeEngine {
         return encryptRule.getEncryptorEngine().isHasShardingQueryAssistedEncryptor(insertStatement.getTables().getSingleTableName());
     }
     
-    private void fillWithQueryAssistedColumn(final InsertColumnValues insertColumnValues, final int insertColumnValueIndex) {
+    private void fillWithQueryAssistedColumn(final InsertOptimizeResult insertOptimizeResult, final int insertOptimizeResultIndex) {
         Collection<String> assistedColumnNames = new LinkedList<>();
-        for (String each : insertColumnValues.getColumnNames()) {
-            InsertColumnValue insertColumnValue = insertColumnValues.getColumnValues().get(insertColumnValueIndex);
+        for (String each : insertOptimizeResult.getColumnNames()) {
+            InsertOptimizeResultUnit unit = insertOptimizeResult.getUnits().get(insertOptimizeResultIndex);
             Optional<String> assistedColumnName = encryptRule.getEncryptorEngine().getAssistedQueryColumn(insertStatement.getTables().getSingleTableName(), each);
             if (assistedColumnName.isPresent()) {
                 assistedColumnNames.add(assistedColumnName.get());
-                fillWithColumnValue(insertColumnValue, (Comparable<?>) insertColumnValue.getColumnValue(each));
+                fillInsertOptimizeResultUnit(unit, (Comparable<?>) unit.getColumnValue(each));
             }
         }
         if (!assistedColumnNames.isEmpty()) {
-            insertColumnValues.getColumnNames().addAll(assistedColumnNames);
+            insertOptimizeResult.getColumnNames().addAll(assistedColumnNames);
         }
     }
     
-    private void fillWithColumnValue(final InsertColumnValue insertColumnValue, final Comparable<?> columnValue) {
+    private void fillInsertOptimizeResultUnit(final InsertOptimizeResultUnit unit, final Comparable<?> columnValue) {
         if (!parameters.isEmpty()) {
-            insertColumnValue.getValues().add(new SQLPlaceholderExpression(parameters.size() - 1));
-            insertColumnValue.getParameters().add(columnValue);
-        } else if (columnValue.getClass() == String.class) {
-            insertColumnValue.getValues().add(new SQLTextExpression(columnValue.toString()));
+            // TODO fix start index and stop index
+            unit.addColumnValue(new ParameterMarkerExpressionSegment(0, 0, parameters.size() - 1));
+            unit.addColumnParameter(columnValue);
         } else {
-            insertColumnValue.getValues().add(new SQLNumberExpression((Number) columnValue));
+            // TODO fix start index and stop index
+            unit.addColumnValue(new LiteralExpressionSegment(0, 0, columnValue));
         }
     }
 }

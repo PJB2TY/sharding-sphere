@@ -21,7 +21,7 @@
     <parent>
         <groupId>org.apache.shardingsphere</groupId>
         <artifactId>sharding-jdbc-orchestration-spring</artifactId>
-        <version>4.0.0-RC1-SNAPSHOT</version>
+        <version>4.0.0-RC2-SNAPSHOT</version>
     </parent>
     <artifactId>sharding-jdbc-orchestration-spring-boot-starter</artifactId>
     <name>${project.artifactId}</name>
@@ -35,10 +35,6 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-configuration-processor</artifactId>
             <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-jdbc</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

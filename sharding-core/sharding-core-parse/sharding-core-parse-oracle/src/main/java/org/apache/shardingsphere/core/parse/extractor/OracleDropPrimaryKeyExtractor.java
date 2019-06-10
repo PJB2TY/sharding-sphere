@@ -19,10 +19,12 @@ package org.apache.shardingsphere.core.parse.extractor;
 
 import com.google.common.base.Optional;
 import org.antlr.v4.runtime.ParserRuleContext;
-import org.apache.shardingsphere.core.parse.antlr.extractor.OptionalSQLSegmentExtractor;
-import org.apache.shardingsphere.core.parse.antlr.extractor.util.ExtractorUtils;
-import org.apache.shardingsphere.core.parse.antlr.extractor.util.RuleName;
-import org.apache.shardingsphere.core.parse.antlr.sql.segment.definition.constraint.DropPrimaryKeySegment;
+import org.apache.shardingsphere.core.parse.extractor.api.OptionalSQLSegmentExtractor;
+import org.apache.shardingsphere.core.parse.extractor.util.ExtractorUtils;
+import org.apache.shardingsphere.core.parse.extractor.util.RuleName;
+import org.apache.shardingsphere.core.parse.sql.segment.ddl.constraint.DropPrimaryKeySegment;
+
+import java.util.Map;
 
 /**
  * Drop primary key extractor for Oracle.
@@ -32,11 +34,13 @@ import org.apache.shardingsphere.core.parse.antlr.sql.segment.definition.constra
 public final class OracleDropPrimaryKeyExtractor implements OptionalSQLSegmentExtractor {
     
     @Override
-    public Optional<DropPrimaryKeySegment> extract(final ParserRuleContext ancestorNode) {
+    public Optional<DropPrimaryKeySegment> extract(final ParserRuleContext ancestorNode, final Map<ParserRuleContext, Integer> parameterMarkerIndexes) {
         Optional<ParserRuleContext> dropConstraintNode = ExtractorUtils.findFirstChildNode(ancestorNode, RuleName.DROP_CONSTRAINT_CLAUSE);
         if (!dropConstraintNode.isPresent()) {
             return Optional.absent();
         }
-        return ExtractorUtils.findFirstChildNode(dropConstraintNode.get(), RuleName.PRIMARY_KEY).isPresent() ? Optional.of(new DropPrimaryKeySegment()) : Optional.<DropPrimaryKeySegment>absent();
+        return ExtractorUtils.findFirstChildNode(dropConstraintNode.get(), RuleName.PRIMARY_KEY).isPresent()
+                ? Optional.of(new DropPrimaryKeySegment(dropConstraintNode.get().getStart().getStartIndex(), dropConstraintNode.get().getStop().getStopIndex()))
+                : Optional.<DropPrimaryKeySegment>absent();
     }
 }

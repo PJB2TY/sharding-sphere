@@ -24,10 +24,10 @@ import org.apache.shardingsphere.core.optimize.engine.encrypt.EncryptDefaultOpti
 import org.apache.shardingsphere.core.optimize.engine.encrypt.EncryptInsertOptimizeEngine;
 import org.apache.shardingsphere.core.optimize.engine.sharding.insert.InsertOptimizeEngine;
 import org.apache.shardingsphere.core.optimize.engine.sharding.query.QueryOptimizeEngine;
-import org.apache.shardingsphere.core.parse.parser.sql.SQLStatement;
-import org.apache.shardingsphere.core.parse.parser.sql.dml.DMLStatement;
-import org.apache.shardingsphere.core.parse.parser.sql.dml.insert.InsertStatement;
-import org.apache.shardingsphere.core.parse.parser.sql.dql.select.SelectStatement;
+import org.apache.shardingsphere.core.parse.sql.statement.SQLStatement;
+import org.apache.shardingsphere.core.parse.sql.statement.dml.DMLStatement;
+import org.apache.shardingsphere.core.parse.sql.statement.dml.InsertStatement;
+import org.apache.shardingsphere.core.parse.sql.statement.dml.SelectStatement;
 import org.apache.shardingsphere.core.rule.EncryptRule;
 import org.apache.shardingsphere.core.rule.ShardingRule;
 
@@ -57,10 +57,10 @@ public final class OptimizeEngineFactory {
             return new InsertOptimizeEngine(shardingRule, (InsertStatement) sqlStatement, parameters, generatedKey);
         }
         if (sqlStatement instanceof SelectStatement || sqlStatement instanceof DMLStatement) {
-            return new QueryOptimizeEngine(sqlStatement.getRouteConditions().getOrCondition(), parameters);
+            return new QueryOptimizeEngine(sqlStatement, parameters, sqlStatement.getShardingConditions());
         }
         // TODO do with DDL and DAL
-        return new QueryOptimizeEngine(sqlStatement.getRouteConditions().getOrCondition(), parameters);
+        return new QueryOptimizeEngine(sqlStatement, parameters, sqlStatement.getShardingConditions());
     }
     
     /**

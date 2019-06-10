@@ -17,14 +17,9 @@
 
 package org.apache.shardingsphere.core.parse;
 
-import org.antlr.v4.runtime.RecognitionException;
-import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.TokenStream;
-import org.apache.shardingsphere.core.parse.antlr.autogen.SQLServerStatementParser;
-import org.apache.shardingsphere.core.parse.antlr.parser.advanced.AdvancedErrorStrategy;
-import org.apache.shardingsphere.core.parse.antlr.parser.advanced.AdvancedMatchHandler;
-import org.apache.shardingsphere.core.parse.antlr.parser.advanced.AdvancedParserATNSimulator;
 import org.apache.shardingsphere.core.parse.api.SQLParser;
+import org.apache.shardingsphere.core.parse.autogen.SQLServerStatementParser;
 
 /**
  * SQL parser for SQLServer.
@@ -33,20 +28,7 @@ import org.apache.shardingsphere.core.parse.api.SQLParser;
  */
 public final class SQLServerParser extends SQLServerStatementParser implements SQLParser {
     
-    private final AdvancedMatchHandler advancedMatchHandler;
-    
     public SQLServerParser(final TokenStream input) {
         super(input);
-        _interp = new AdvancedParserATNSimulator(this, _ATN, _decisionToDFA, _sharedContextCache, ID);
-        _errHandler = new AdvancedErrorStrategy(ID);
-        advancedMatchHandler = new AdvancedMatchHandler(this, ID);
-    }
-    
-    @Override
-    public Token match(final int tokenType) throws RecognitionException {
-        if (Token.EOF == tokenType) {
-            matchedEOF = true;
-        }
-        return advancedMatchHandler.getMatchedToken(tokenType);
     }
 }

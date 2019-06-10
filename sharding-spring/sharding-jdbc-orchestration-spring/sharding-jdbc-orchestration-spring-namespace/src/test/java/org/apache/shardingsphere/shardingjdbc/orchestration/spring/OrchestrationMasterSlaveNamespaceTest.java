@@ -35,6 +35,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.AbstractJUnit4SpringContextTests;
 
 import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
@@ -48,7 +49,7 @@ public class OrchestrationMasterSlaveNamespaceTest extends AbstractJUnit4SpringC
     
     @Test
     public void assertMasterSlaveDataSourceType() {
-        assertTrue(null != applicationContext.getBean("defaultMasterSlaveDataSourceOrchestration", OrchestrationSpringMasterSlaveDataSource.class));
+        assertNotNull(applicationContext.getBean("defaultMasterSlaveDataSourceOrchestration", OrchestrationSpringMasterSlaveDataSource.class));
     }
     
     @Test
@@ -69,7 +70,7 @@ public class OrchestrationMasterSlaveNamespaceTest extends AbstractJUnit4SpringC
     
     @Test
     @Ignore
-    // TODO process LOAD_BALANCE_ALGORITHM_REF_ATTRIBUTE
+    // TODO TODO load balance algorithm have been construct twice for SpringMasterDatasource extends MasterSlaveDatasource.
     public void assertRefMasterSlaveDataSource() {
         MasterSlaveLoadBalanceAlgorithm randomLoadBalanceAlgorithm = applicationContext.getBean("randomLoadBalanceAlgorithm", MasterSlaveLoadBalanceAlgorithm.class);
         MasterSlaveRule masterSlaveRule = getMasterSlaveRule("refMasterSlaveDataSourceOrchestration");

@@ -18,18 +18,21 @@
 package org.apache.shardingsphere.shardingjdbc.spring.boot;
 
 import com.google.common.base.Preconditions;
+import lombok.RequiredArgsConstructor;
+import org.apache.shardingsphere.core.exception.ShardingException;
+import org.apache.shardingsphere.core.util.InlineExpressionParser;
+import org.apache.shardingsphere.core.yaml.swapper.impl.EncryptRuleConfigurationYamlSwapper;
+import org.apache.shardingsphere.core.yaml.swapper.impl.MasterSlaveRuleConfigurationYamlSwapper;
+import org.apache.shardingsphere.core.yaml.swapper.impl.ShardingRuleConfigurationYamlSwapper;
+import org.apache.shardingsphere.shardingjdbc.api.EncryptDataSourceFactory;
+import org.apache.shardingsphere.shardingjdbc.api.MasterSlaveDataSourceFactory;
+import org.apache.shardingsphere.shardingjdbc.api.ShardingDataSourceFactory;
 import org.apache.shardingsphere.shardingjdbc.spring.boot.common.SpringBootPropertiesConfigurationProperties;
+import org.apache.shardingsphere.shardingjdbc.spring.boot.encrypt.SpringBootEncryptRuleConfigurationProperties;
 import org.apache.shardingsphere.shardingjdbc.spring.boot.masterslave.SpringBootMasterSlaveRuleConfigurationProperties;
 import org.apache.shardingsphere.shardingjdbc.spring.boot.sharding.SpringBootShardingRuleConfigurationProperties;
 import org.apache.shardingsphere.shardingjdbc.spring.boot.util.DataSourceUtil;
 import org.apache.shardingsphere.shardingjdbc.spring.boot.util.PropertyUtil;
-import lombok.RequiredArgsConstructor;
-import org.apache.shardingsphere.core.exception.ShardingException;
-import org.apache.shardingsphere.core.util.InlineExpressionParser;
-import org.apache.shardingsphere.core.yaml.swapper.impl.MasterSlaveRuleConfigurationYamlSwapper;
-import org.apache.shardingsphere.core.yaml.swapper.impl.ShardingRuleConfigurationYamlSwapper;
-import org.apache.shardingsphere.shardingjdbc.api.MasterSlaveDataSourceFactory;
-import org.apache.shardingsphere.shardingjdbc.api.ShardingDataSourceFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.EnvironmentAware;
@@ -37,9 +40,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.core.env.StandardEnvironment;
+import org.springframework.jndi.JndiObjectFactoryBean;
 
+import javax.naming.NamingException;
 import javax.sql.DataSource;
 import java.sql.SQLException;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,15 +58,17 @@ import java.util.Map;
  */
 @Configuration
 @EnableConfigurationProperties({
-        SpringBootShardingRuleConfigurationProperties.class, SpringBootMasterSlaveRuleConfigurationProperties.class, SpringBootPropertiesConfigurationProperties.class
-})
-@ConditionalOnProperty(prefix = "sharding.jdbc", name = "enabled", havingValue = "true", matchIfMissing = true)
+        SpringBootShardingRuleConfigurationProperties.class, 
+        SpringBootMasterSlaveRuleConfigurationProperties.class, SpringBootEncryptRuleConfigurationProperties.class, SpringBootPropertiesConfigurationProperties.class})
+@ConditionalOnProperty(prefix = "spring.shardingsphere", name = "enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 public class SpringBootConfiguration implements EnvironmentAware {
     
     private final SpringBootShardingRuleConfigurationProperties shardingProperties;
     
     private final SpringBootMasterSlaveRuleConfigurationProperties masterSlaveProperties;
+    
+    private final SpringBootEncryptRuleConfigurationProperties encryptProperties;
     
     private final SpringBootPropertiesConfigurationProperties propMapProperties;
     
@@ -70,6 +78,10 @@ public class SpringBootConfiguration implements EnvironmentAware {
     
     private final MasterSlaveRuleConfigurationYamlSwapper masterSlaveSwapper = new MasterSlaveRuleConfigurationYamlSwapper();
     
+    private final EncryptRuleConfigurationYamlSwapper encryptSwapper = new EncryptRuleConfigurationYamlSwapper();
+    
+    private final String jndiName = "jndi-name";
+    
     /**
      * Get data source bean.
      *
@@ -78,19 +90,25 @@ public class SpringBootConfiguration implements EnvironmentAware {
      */
     @Bean
     public DataSource dataSource() throws SQLException {
-        return null == masterSlaveProperties.getMasterDataSourceName()
-                ? ShardingDataSourceFactory.createDataSource(dataSourceMap, shardingSwapper.swap(shardingProperties), propMapProperties.getProps())
-                : MasterSlaveDataSourceFactory.createDataSource(dataSourceMap, masterSlaveSwapper.swap(masterSlaveProperties), propMapProperties.getProps());
+        if (null != masterSlaveProperties.getMasterDataSourceName()) {
+            return MasterSlaveDataSourceFactory.createDataSource(dataSourceMap, masterSlaveSwapper.swap(masterSlaveProperties), propMapProperties.getProps());
+        }
+        if (!encryptProperties.getEncryptors().isEmpty()) {
+            return EncryptDataSourceFactory.createDataSource(dataSourceMap.values().iterator().next(), encryptSwapper.swap(encryptProperties));
+        }
+        return ShardingDataSourceFactory.createDataSource(dataSourceMap, shardingSwapper.swap(shardingProperties), propMapProperties.getProps());
     }
     
     @Override
     public final void setEnvironment(final Environment environment) {
-        String prefix = "sharding.jdbc.datasource.";
+        String prefix = "spring.shardingsphere.datasource.";
         for (String each : getDataSourceNames(environment, prefix)) {
             try {
                 dataSourceMap.put(each, getDataSource(environment, prefix, each));
             } catch (final ReflectiveOperationException ex) {
                 throw new ShardingException("Can't find datasource type!", ex);
+            } catch (final NamingException namingEx) {
+                throw new ShardingException("Can't find JNDI datasource!", namingEx);
             }
         }
     }
@@ -98,14 +116,26 @@ public class SpringBootConfiguration implements EnvironmentAware {
     private List<String> getDataSourceNames(final Environment environment, final String prefix) {
         StandardEnvironment standardEnv = (StandardEnvironment) environment;
         standardEnv.setIgnoreUnresolvableNestedPlaceholders(true);
-        String dataSources = standardEnv.getProperty(prefix + "names");
-        return new InlineExpressionParser(dataSources).splitAndEvaluate();
+        return null == standardEnv.getProperty(prefix + "name") 
+                ? new InlineExpressionParser(standardEnv.getProperty(prefix + "names")).splitAndEvaluate() : Collections.singletonList(standardEnv.getProperty(prefix + "name"));
     }
     
     @SuppressWarnings("unchecked")
-    private DataSource getDataSource(final Environment environment, final String prefix, final String dataSourceName) throws ReflectiveOperationException {
+    private DataSource getDataSource(final Environment environment, final String prefix, final String dataSourceName) throws ReflectiveOperationException, NamingException {
         Map<String, Object> dataSourceProps = PropertyUtil.handle(environment, prefix + dataSourceName.trim(), Map.class);
         Preconditions.checkState(!dataSourceProps.isEmpty(), "Wrong datasource properties!");
+        if (dataSourceProps.containsKey(jndiName)) {
+            return getJndiDataSource(dataSourceProps.get(jndiName).toString());
+        }
         return DataSourceUtil.getDataSource(dataSourceProps.get("type").toString(), dataSourceProps);
+    }
+    
+    private DataSource getJndiDataSource(final String jndiName) throws NamingException {
+        JndiObjectFactoryBean bean = new JndiObjectFactoryBean();
+        bean.setResourceRef(true);
+        bean.setJndiName(jndiName);
+        bean.setProxyInterface(DataSource.class);
+        bean.afterPropertiesSet();
+        return (DataSource) bean.getObject();
     }
 }

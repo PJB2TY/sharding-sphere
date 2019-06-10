@@ -19,15 +19,15 @@ package org.apache.shardingsphere.core.merge;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import org.apache.shardingsphere.core.constant.DatabaseType;
 import org.apache.shardingsphere.core.execute.sql.execute.result.QueryResult;
 import org.apache.shardingsphere.core.merge.dal.DALMergeEngine;
 import org.apache.shardingsphere.core.merge.dql.DQLMergeEngine;
 import org.apache.shardingsphere.core.metadata.table.ShardingTableMetaData;
-import org.apache.shardingsphere.core.parse.parser.sql.SQLStatement;
-import org.apache.shardingsphere.core.parse.parser.sql.dal.DALStatement;
-import org.apache.shardingsphere.core.parse.parser.sql.dql.select.SelectStatement;
+import org.apache.shardingsphere.core.parse.sql.statement.dal.DALStatement;
+import org.apache.shardingsphere.core.parse.sql.statement.dml.SelectStatement;
+import org.apache.shardingsphere.core.route.SQLRouteResult;
 import org.apache.shardingsphere.core.rule.ShardingRule;
+import org.apache.shardingsphere.spi.DbType;
 
 import java.sql.SQLException;
 import java.util.List;
@@ -46,20 +46,20 @@ public final class MergeEngineFactory {
      *
      * @param databaseType database type
      * @param shardingRule sharding rule
-     * @param sqlStatement SQL statement
+     * @param routeResult SQL route result
      * @param shardingTableMetaData sharding table meta Data
      * @param queryResults query results
      * @return merge engine instance
      * @throws SQLException SQL exception
      */
-    public static MergeEngine newInstance(final DatabaseType databaseType, final ShardingRule shardingRule, 
-                                          final SQLStatement sqlStatement, final ShardingTableMetaData shardingTableMetaData, final List<QueryResult> queryResults) throws SQLException {
-        if (sqlStatement instanceof SelectStatement) {
-            return new DQLMergeEngine(databaseType, (SelectStatement) sqlStatement, queryResults);
+    public static MergeEngine newInstance(final DbType databaseType, final ShardingRule shardingRule,
+                                          final SQLRouteResult routeResult, final ShardingTableMetaData shardingTableMetaData, final List<QueryResult> queryResults) throws SQLException {
+        if (routeResult.getSqlStatement() instanceof SelectStatement) {
+            return new DQLMergeEngine(databaseType, routeResult, queryResults);
         } 
-        if (sqlStatement instanceof DALStatement) {
-            return new DALMergeEngine(shardingRule, queryResults, (DALStatement) sqlStatement, shardingTableMetaData);
+        if (routeResult.getSqlStatement() instanceof DALStatement) {
+            return new DALMergeEngine(shardingRule, queryResults, (DALStatement) routeResult.getSqlStatement(), shardingTableMetaData);
         }
-        throw new UnsupportedOperationException(String.format("Cannot support type '%s'", sqlStatement.getType()));
+        throw new UnsupportedOperationException(String.format("Cannot support type '%s'", routeResult.getSqlStatement().getType()));
     }
 }
