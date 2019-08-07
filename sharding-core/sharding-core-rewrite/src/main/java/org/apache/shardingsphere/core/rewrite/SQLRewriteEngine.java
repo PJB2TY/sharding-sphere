@@ -18,27 +18,29 @@
 package org.apache.shardingsphere.core.rewrite;
 
 import com.google.common.base.Optional;
-import org.apache.shardingsphere.core.parse.sql.statement.SQLStatement;
+import com.google.common.base.Preconditions;
+import org.apache.shardingsphere.core.optimize.api.statement.InsertOptimizedStatement;
+import org.apache.shardingsphere.core.optimize.api.statement.OptimizedStatement;
+import org.apache.shardingsphere.core.optimize.sharding.segment.insert.InsertOptimizeResultUnit;
+import org.apache.shardingsphere.core.rewrite.builder.BaseParameterBuilder;
+import org.apache.shardingsphere.core.rewrite.builder.InsertParameterBuilder;
 import org.apache.shardingsphere.core.rewrite.builder.ParameterBuilder;
 import org.apache.shardingsphere.core.rewrite.builder.SQLBuilder;
-import org.apache.shardingsphere.core.rewrite.rewriter.parameter.ParameterRewriter;
-import org.apache.shardingsphere.core.rewrite.rewriter.sql.BaseSQLRewriter;
-import org.apache.shardingsphere.core.rewrite.rewriter.sql.SQLRewriter;
 import org.apache.shardingsphere.core.rewrite.token.BaseTokenGenerateEngine;
 import org.apache.shardingsphere.core.rewrite.token.EncryptTokenGenerateEngine;
 import org.apache.shardingsphere.core.rewrite.token.ShardingTokenGenerateEngine;
 import org.apache.shardingsphere.core.rewrite.token.pojo.SQLToken;
+import org.apache.shardingsphere.core.route.SQLRouteResult;
 import org.apache.shardingsphere.core.route.SQLUnit;
 import org.apache.shardingsphere.core.route.type.RoutingUnit;
-import org.apache.shardingsphere.core.route.type.TableUnit;
 import org.apache.shardingsphere.core.rule.BaseRule;
-import org.apache.shardingsphere.core.rule.BindingTableRule;
 import org.apache.shardingsphere.core.rule.EncryptRule;
+import org.apache.shardingsphere.core.rule.MasterSlaveRule;
 import org.apache.shardingsphere.core.rule.ShardingRule;
+import org.apache.shardingsphere.spi.encrypt.ShardingEncryptor;
+import org.apache.shardingsphere.spi.encrypt.ShardingQueryAssistedEncryptor;
 
-import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -53,7 +55,7 @@ public final class SQLRewriteEngine {
     
     private final BaseRule baseRule;
     
-    private final SQLStatement sqlStatement;
+    private final OptimizedStatement optimizedStatement;
     
     private final List<SQLToken> sqlTokens;
     
@@ -61,70 +63,89 @@ public final class SQLRewriteEngine {
     
     private final ParameterBuilder parameterBuilder;
     
-    private final BaseSQLRewriter baseSQLRewriter;
-    
-    public SQLRewriteEngine(final ShardingRule shardingRule, final SQLStatement sqlStatement, final List<Object> parameters, final boolean isSingleRoute) {
+    public SQLRewriteEngine(final ShardingRule shardingRule, 
+                            final SQLRouteResult sqlRouteResult, final String sql, final List<Object> parameters, final boolean isSingleRoute, final boolean isQueryWithCipherColumn) {
         baseRule = shardingRule;
-        this.sqlStatement = sqlStatement;
-        sqlTokens = createSQLTokens(shardingRule, sqlStatement, parameters, isSingleRoute);
-        sqlBuilder = new SQLBuilder();
-        parameterBuilder = new ParameterBuilder(parameters);
-        baseSQLRewriter = new BaseSQLRewriter(sqlStatement, sqlTokens);
+        this.optimizedStatement = getEncryptedOptimizedStatement(shardingRule.getEncryptRule(), sqlRouteResult.getOptimizedStatement());
+        parameterBuilder = createParameterBuilder(parameters, sqlRouteResult);
+        sqlTokens = createSQLTokens(isSingleRoute, isQueryWithCipherColumn);
+        sqlBuilder = new SQLBuilder(sql, sqlTokens);
     }
     
-    public SQLRewriteEngine(final EncryptRule encryptRule, final SQLStatement sqlStatement, final List<Object> parameters) {
+    public SQLRewriteEngine(final EncryptRule encryptRule, final OptimizedStatement optimizedStatement, final String sql, final List<Object> parameters, final boolean isQueryWithCipherColumn) {
         baseRule = encryptRule;
-        this.sqlStatement = sqlStatement;
-        sqlTokens = createSQLTokens(encryptRule, sqlStatement, parameters, true);
-        sqlBuilder = new SQLBuilder();
-        parameterBuilder = new ParameterBuilder(parameters);
-        baseSQLRewriter = new BaseSQLRewriter(sqlStatement, sqlTokens);
+        this.optimizedStatement = getEncryptedOptimizedStatement(encryptRule, optimizedStatement);
+        parameterBuilder = createParameterBuilder(parameters);
+        sqlTokens = createSQLTokens(false, isQueryWithCipherColumn);
+        sqlBuilder = new SQLBuilder(sql, sqlTokens);
     }
     
-    public SQLRewriteEngine(final SQLStatement sqlStatement) {
-        baseRule = null;
-        this.sqlStatement = sqlStatement;
-        sqlTokens = createSQLTokens(null, sqlStatement, Collections.emptyList(), true);
-        sqlBuilder = new SQLBuilder();
-        parameterBuilder = new ParameterBuilder(Collections.emptyList());
-        baseSQLRewriter = new BaseSQLRewriter(sqlStatement, sqlTokens);
+    public SQLRewriteEngine(final MasterSlaveRule masterSlaveRule, final OptimizedStatement optimizedStatement, final String sql) {
+        baseRule = masterSlaveRule;
+        this.optimizedStatement = optimizedStatement;
+        parameterBuilder = createParameterBuilder(Collections.emptyList());
+        sqlTokens = createSQLTokens(false, false);
+        sqlBuilder = new SQLBuilder(sql, sqlTokens);
     }
     
-    private List<SQLToken> createSQLTokens(final BaseRule baseRule, final SQLStatement sqlStatement, final List<Object> parameters, final boolean isSingleRoute) {
+    private OptimizedStatement getEncryptedOptimizedStatement(final EncryptRule encryptRule, final OptimizedStatement optimizedStatement) {
+        if (isNeededToEncrypt(encryptRule, optimizedStatement)) {
+            encryptInsertOptimizeResultUnit(encryptRule, optimizedStatement);
+        }
+        return optimizedStatement;
+    }
+    
+    private boolean isNeededToEncrypt(final EncryptRule encryptRule, final OptimizedStatement optimizedStatement) {
+        return optimizedStatement instanceof InsertOptimizedStatement && !encryptRule.getEncryptTableNames().isEmpty();
+    }
+    
+    private void encryptInsertOptimizeResultUnit(final EncryptRule encryptRule, final OptimizedStatement optimizedStatement) {
+        for (InsertOptimizeResultUnit unit : ((InsertOptimizedStatement) optimizedStatement).getUnits()) {
+            for (String each : ((InsertOptimizedStatement) optimizedStatement).getInsertColumns().getRegularColumnNames()) {
+                encryptInsertOptimizeResult(encryptRule, unit, optimizedStatement.getTables().getSingleTableName(), each);
+            }
+        }
+    }
+    
+    private void encryptInsertOptimizeResult(final EncryptRule encryptRule, final InsertOptimizeResultUnit unit, final String tableName, final String columnName) {
+        Optional<ShardingEncryptor> shardingEncryptor = encryptRule.getShardingEncryptor(tableName, columnName);
+        if (!shardingEncryptor.isPresent()) {
+            return;
+        }
+        if (shardingEncryptor.get() instanceof ShardingQueryAssistedEncryptor) {
+            Optional<String> assistedColumnName = encryptRule.getAssistedQueryColumn(tableName, columnName);
+            Preconditions.checkArgument(assistedColumnName.isPresent(), "Can not find assisted query Column Name");
+            unit.setColumnValue(assistedColumnName.get(), ((ShardingQueryAssistedEncryptor) shardingEncryptor.get()).queryAssistedEncrypt(unit.getColumnValue(columnName).toString()));
+        }
+        unit.setColumnValue(columnName, shardingEncryptor.get().encrypt(unit.getColumnValue(columnName)));
+    }
+    
+    private ParameterBuilder createParameterBuilder(final List<Object> parameters, final SQLRouteResult sqlRouteResult) {
+        if (optimizedStatement instanceof InsertOptimizedStatement) {
+            return new InsertParameterBuilder(parameters, (InsertOptimizedStatement) optimizedStatement);
+        }
+        return new BaseParameterBuilder(parameters, sqlRouteResult);
+    }
+    
+    private ParameterBuilder createParameterBuilder(final List<Object> parameters) {
+        if (optimizedStatement instanceof InsertOptimizedStatement) {
+            return new InsertParameterBuilder(parameters, (InsertOptimizedStatement) optimizedStatement);
+        }
+        return new BaseParameterBuilder(parameters);
+    }
+    
+    private List<SQLToken> createSQLTokens(final boolean isSingleRoute, final boolean isQueryWithCipherColumn) {
         List<SQLToken> result = new LinkedList<>();
-        result.addAll(new BaseTokenGenerateEngine().generateSQLTokens(sqlStatement, parameters, baseRule, isSingleRoute));
+        result.addAll(new BaseTokenGenerateEngine().generateSQLTokens(optimizedStatement, parameterBuilder, baseRule, isSingleRoute, isQueryWithCipherColumn));
         if (baseRule instanceof ShardingRule) {
             ShardingRule shardingRule = (ShardingRule) baseRule;
-            result.addAll(new ShardingTokenGenerateEngine().generateSQLTokens(sqlStatement, parameters, shardingRule, isSingleRoute));
-            result.addAll(new EncryptTokenGenerateEngine().generateSQLTokens(sqlStatement, parameters, shardingRule.getEncryptRule(), isSingleRoute));
+            result.addAll(new ShardingTokenGenerateEngine().generateSQLTokens(optimizedStatement, parameterBuilder, shardingRule, isSingleRoute, isQueryWithCipherColumn));
+            result.addAll(new EncryptTokenGenerateEngine().generateSQLTokens(optimizedStatement, parameterBuilder, shardingRule.getEncryptRule(), isSingleRoute, isQueryWithCipherColumn));
         } else if (baseRule instanceof EncryptRule) {
-            result.addAll(new EncryptTokenGenerateEngine().generateSQLTokens(sqlStatement, parameters, (EncryptRule) baseRule, isSingleRoute));
+            result.addAll(new EncryptTokenGenerateEngine().generateSQLTokens(optimizedStatement, parameterBuilder, (EncryptRule) baseRule, isSingleRoute, isQueryWithCipherColumn));
         }
         Collections.sort(result);
         return result;
-    }
-    
-    /**
-     * Initialize SQL rewrite engine.
-     * 
-     * @param parameterRewriters parameter rewriters
-     * @param sqlRewriters SQL rewriters
-     */
-    public void init(final Collection<ParameterRewriter> parameterRewriters, final Collection<SQLRewriter> sqlRewriters) {
-        for (ParameterRewriter each : parameterRewriters) {
-            each.rewrite(parameterBuilder);
-        }
-        if (sqlTokens.isEmpty()) {
-            baseSQLRewriter.appendWholeSQL(sqlBuilder);
-            return;
-        }
-        baseSQLRewriter.appendInitialLiteral(sqlBuilder);
-        for (SQLToken each : sqlTokens) {
-            for (SQLRewriter sqlRewriter : sqlRewriters) {
-                sqlRewriter.rewrite(sqlBuilder, parameterBuilder, each);
-            }
-            baseSQLRewriter.rewrite(sqlBuilder, parameterBuilder, each);
-        }
     }
     
     /**
@@ -140,33 +161,10 @@ public final class SQLRewriteEngine {
      * Generate SQL.
      * 
      * @param routingUnit routing unit
+     * @param logicAndActualTables logic and actual tables
      * @return sql unit
      */
-    public SQLUnit generateSQL(final RoutingUnit routingUnit) {
-        return new SQLUnit(sqlBuilder.toSQL(routingUnit, getTableTokens(routingUnit)), parameterBuilder.getParameters(routingUnit));
-    }
-   
-    private Map<String, String> getTableTokens(final RoutingUnit routingUnit) {
-        Map<String, String> result = new HashMap<>();
-        for (TableUnit each : routingUnit.getTableUnits()) {
-            String logicTableName = each.getLogicTableName().toLowerCase();
-            result.put(logicTableName, each.getActualTableName());
-            Optional<BindingTableRule> bindingTableRule = ((ShardingRule) baseRule).findBindingTableRule(logicTableName);
-            if (bindingTableRule.isPresent()) {
-                result.putAll(getBindingTableTokens(routingUnit.getMasterSlaveLogicDataSourceName(), each, bindingTableRule.get()));
-            }
-        }
-        return result;
-    }
-    
-    private Map<String, String> getBindingTableTokens(final String dataSourceName, final TableUnit tableUnit, final BindingTableRule bindingTableRule) {
-        Map<String, String> result = new HashMap<>();
-        for (String each : sqlStatement.getTables().getTableNames()) {
-            String tableName = each.toLowerCase();
-            if (!tableName.equals(tableUnit.getLogicTableName().toLowerCase()) && bindingTableRule.hasLogicTable(tableName)) {
-                result.put(tableName, bindingTableRule.getBindingActualTable(dataSourceName, tableName, tableUnit.getActualTableName()));
-            }
-        }
-        return result;
+    public SQLUnit generateSQL(final RoutingUnit routingUnit, final Map<String, String> logicAndActualTables) {
+        return new SQLUnit(sqlBuilder.toSQL(routingUnit, logicAndActualTables), parameterBuilder.getParameters(routingUnit));
     }
 }

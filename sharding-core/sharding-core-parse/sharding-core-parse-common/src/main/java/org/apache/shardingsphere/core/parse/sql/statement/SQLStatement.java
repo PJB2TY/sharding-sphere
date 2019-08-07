@@ -18,9 +18,6 @@
 package org.apache.shardingsphere.core.parse.sql.statement;
 
 import com.google.common.base.Optional;
-import org.apache.shardingsphere.core.constant.SQLType;
-import org.apache.shardingsphere.core.parse.sql.context.condition.Conditions;
-import org.apache.shardingsphere.core.parse.sql.context.table.Tables;
 import org.apache.shardingsphere.core.parse.sql.segment.SQLSegment;
 
 import java.util.Collection;
@@ -33,67 +30,18 @@ import java.util.Collection;
 public interface SQLStatement {
     
     /**
-     * Get SQL type.
+     * Get count of parameters.
      *
-     * @return SQL type
+     * @return count of parameters
      */
-    SQLType getType();
+    int getParametersCount();
     
     /**
-     * Get SQL segments.
+     * Get all SQL segments.
      * 
-     * @return SQL segments
+     * @return all SQL segments
      */
-    Collection<SQLSegment> getSqlSegments();
-    
-    /**
-     * Get tables.
-     * 
-     * @return tables
-     */
-    Tables getTables();
-    
-    /**
-     * Get sharding conditions.
-     *
-     * @return conditions
-     */
-    Conditions getShardingConditions();
-    
-    /**
-     * Get encrypt conditions.
-     *
-     * @return conditions
-     */
-    Conditions getEncryptConditions();
-    
-    /**
-     * Get index of parameters.
-     *
-     * @return index of parameters
-     */
-    int getParametersIndex();
-    
-    /**
-     * Set parameters index.
-     * 
-     * @param parametersIndex parameters index
-     */
-    void setParametersIndex(int parametersIndex);
-    
-    /**
-     * Get logic SQL.
-     * 
-     * @return logic SQL
-     */
-    String getLogicSQL();
-    
-    /**
-     * Set logic SQL.
-     * 
-     * @param logicTable logic SQL
-     */
-    void setLogicSQL(String logicTable);
+    Collection<SQLSegment> getAllSQLSegments();
     
     /**
      * Find SQL segment.

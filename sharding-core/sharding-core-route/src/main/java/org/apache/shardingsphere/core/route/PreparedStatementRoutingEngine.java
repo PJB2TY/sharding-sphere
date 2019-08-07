@@ -18,13 +18,13 @@
 package org.apache.shardingsphere.core.route;
 
 import org.apache.shardingsphere.core.metadata.ShardingMetaData;
-import org.apache.shardingsphere.core.parse.cache.ParsingResultCache;
+import org.apache.shardingsphere.core.parse.SQLParseEngine;
 import org.apache.shardingsphere.core.parse.sql.statement.SQLStatement;
 import org.apache.shardingsphere.core.route.router.masterslave.ShardingMasterSlaveRouter;
 import org.apache.shardingsphere.core.route.router.sharding.ShardingRouter;
 import org.apache.shardingsphere.core.route.router.sharding.ShardingRouterFactory;
 import org.apache.shardingsphere.core.rule.ShardingRule;
-import org.apache.shardingsphere.spi.DbType;
+import org.apache.shardingsphere.spi.database.DatabaseType;
 
 import java.util.List;
 
@@ -45,9 +45,9 @@ public final class PreparedStatementRoutingEngine {
     private SQLStatement sqlStatement;
     
     public PreparedStatementRoutingEngine(final String logicSQL, final ShardingRule shardingRule,
-                                          final ShardingMetaData shardingMetaData, final DbType databaseType, final ParsingResultCache parsingResultCache) {
+                                          final ShardingMetaData shardingMetaData, final DatabaseType databaseType, final SQLParseEngine sqlParseEngine) {
         this.logicSQL = logicSQL;
-        shardingRouter = ShardingRouterFactory.newInstance(shardingRule, shardingMetaData, databaseType, parsingResultCache);
+        shardingRouter = ShardingRouterFactory.newInstance(shardingRule, shardingMetaData, databaseType, sqlParseEngine);
         masterSlaveRouter = new ShardingMasterSlaveRouter(shardingRule.getMasterSlaveRules());
     }
     
@@ -63,6 +63,6 @@ public final class PreparedStatementRoutingEngine {
         if (null == sqlStatement) {
             sqlStatement = shardingRouter.parse(logicSQL, true);
         }
-        return masterSlaveRouter.route(shardingRouter.route(sqlStatement, parameters));
+        return masterSlaveRouter.route(shardingRouter.route(logicSQL, parameters, sqlStatement));
     }
 }

@@ -20,13 +20,11 @@ package org.apache.shardingsphere.shardingproxy.backend.communication.jdbc.wrapp
 import lombok.RequiredArgsConstructor;
 import org.apache.shardingsphere.core.PreparedQueryShardingEngine;
 import org.apache.shardingsphere.core.constant.properties.ShardingPropertiesConstant;
-import org.apache.shardingsphere.core.optimize.OptimizeEngineFactory;
-import org.apache.shardingsphere.core.optimize.result.OptimizeResult;
+import org.apache.shardingsphere.core.optimize.api.statement.OptimizedStatement;
+import org.apache.shardingsphere.core.optimize.encrypt.EncryptOptimizeEngineFactory;
+import org.apache.shardingsphere.core.optimize.transparent.statement.TransparentOptimizedStatement;
 import org.apache.shardingsphere.core.parse.sql.statement.SQLStatement;
 import org.apache.shardingsphere.core.rewrite.SQLRewriteEngine;
-import org.apache.shardingsphere.core.rewrite.rewriter.parameter.ParameterRewriter;
-import org.apache.shardingsphere.core.rewrite.rewriter.sql.EncryptSQLRewriter;
-import org.apache.shardingsphere.core.rewrite.rewriter.sql.SQLRewriter;
 import org.apache.shardingsphere.core.route.RouteUnit;
 import org.apache.shardingsphere.core.route.SQLRouteResult;
 import org.apache.shardingsphere.core.route.SQLUnit;
@@ -36,13 +34,12 @@ import org.apache.shardingsphere.shardingproxy.backend.schema.LogicSchema;
 import org.apache.shardingsphere.shardingproxy.backend.schema.MasterSlaveSchema;
 import org.apache.shardingsphere.shardingproxy.backend.schema.ShardingSchema;
 import org.apache.shardingsphere.shardingproxy.context.ShardingProxyContext;
-import org.apache.shardingsphere.spi.DbType;
+import org.apache.shardingsphere.spi.database.DatabaseType;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -61,7 +58,7 @@ public final class PreparedStatementExecutorWrapper implements JDBCExecutorWrapp
     private final List<Object> parameters;
     
     @Override
-    public SQLRouteResult route(final String sql, final DbType databaseType) {
+    public SQLRouteResult route(final String sql, final DatabaseType databaseType) {
         if (logicSchema instanceof ShardingSchema) {
             return doShardingRoute(sql, databaseType);
         }
@@ -71,33 +68,34 @@ public final class PreparedStatementExecutorWrapper implements JDBCExecutorWrapp
         return doEncryptRoute(sql);
     }
     
-    private SQLRouteResult doShardingRoute(final String sql, final DbType databaseType) {
+    private SQLRouteResult doShardingRoute(final String sql, final DatabaseType databaseType) {
         PreparedQueryShardingEngine shardingEngine = new PreparedQueryShardingEngine(sql, logicSchema.getShardingRule(), 
-                ShardingProxyContext.getInstance().getShardingProperties(), logicSchema.getMetaData(), databaseType, logicSchema.getParsingResultCache());
+                ShardingProxyContext.getInstance().getShardingProperties(), logicSchema.getMetaData(), databaseType, logicSchema.getParseEngine());
         return shardingEngine.shard(sql, parameters);
     }
     
     private SQLRouteResult doMasterSlaveRoute(final String sql) {
-        SQLStatement sqlStatement = ((MasterSlaveSchema) logicSchema).getParseEngine().parse(sql, true);
-        SQLRewriteEngine sqlRewriteEngine = new SQLRewriteEngine(sqlStatement);
-        sqlRewriteEngine.init(Collections.<ParameterRewriter>emptyList(), Collections.<SQLRewriter>emptyList());
+        SQLStatement sqlStatement = logicSchema.getParseEngine().parse(sql, true);
+        OptimizedStatement optimizedStatement = new TransparentOptimizedStatement(sqlStatement);
+        SQLRewriteEngine sqlRewriteEngine = new SQLRewriteEngine(((MasterSlaveSchema) logicSchema).getMasterSlaveRule(), optimizedStatement, sql);
         String rewriteSQL = sqlRewriteEngine.generateSQL().getSql();
-        SQLRouteResult result = new SQLRouteResult(sqlStatement);
-        for (String each : new MasterSlaveRouter(((MasterSlaveSchema) logicSchema).getMasterSlaveRule(), ((MasterSlaveSchema) logicSchema).getParseEngine(),
+        SQLRouteResult result = new SQLRouteResult(optimizedStatement);
+        for (String each : new MasterSlaveRouter(((MasterSlaveSchema) logicSchema).getMasterSlaveRule(), logicSchema.getParseEngine(),
                 SHARDING_PROXY_CONTEXT.getShardingProperties().<Boolean>getValue(ShardingPropertiesConstant.SQL_SHOW)).route(rewriteSQL, true)) {
             result.getRouteUnits().add(new RouteUnit(each, new SQLUnit(rewriteSQL, parameters)));
         }
         return result;
     }
     
+    @SuppressWarnings("unchecked")
     private SQLRouteResult doEncryptRoute(final String sql) {
         EncryptSchema encryptSchema = (EncryptSchema) logicSchema;
         SQLStatement sqlStatement = encryptSchema.getParseEngine().parse(sql, true);
-        SQLRewriteEngine sqlRewriteEngine = new SQLRewriteEngine(encryptSchema.getEncryptRule(), sqlStatement, parameters);
-        OptimizeResult optimizeResult = OptimizeEngineFactory.newInstance(encryptSchema.getEncryptRule(), sqlStatement, parameters).optimize();
-        sqlRewriteEngine.init(Collections.<ParameterRewriter>emptyList(), 
-                Collections.<SQLRewriter>singletonList(new EncryptSQLRewriter(encryptSchema.getEncryptRule().getEncryptorEngine(), sqlStatement, optimizeResult)));
-        SQLRouteResult result = new SQLRouteResult(sqlStatement);
+        OptimizedStatement optimizedStatement = EncryptOptimizeEngineFactory.newInstance(
+                sqlStatement).optimize(encryptSchema.getEncryptRule(), logicSchema.getMetaData().getTable(), sql, parameters, sqlStatement);
+        SQLRewriteEngine sqlRewriteEngine = new SQLRewriteEngine(encryptSchema.getEncryptRule(), 
+                optimizedStatement, sql, parameters, ShardingProxyContext.getInstance().getShardingProperties().<Boolean>getValue(ShardingPropertiesConstant.QUERY_WITH_CIPHER_COLUMN));
+        SQLRouteResult result = new SQLRouteResult(optimizedStatement);
         result.getRouteUnits().add(new RouteUnit(logicSchema.getDataSources().keySet().iterator().next(), new SQLUnit(sqlRewriteEngine.generateSQL().getSql(), parameters)));
         return result;
     }

@@ -18,15 +18,16 @@
 package org.apache.shardingsphere.core.route.router.sharding;
 
 import lombok.RequiredArgsConstructor;
-import org.apache.shardingsphere.core.parse.SQLParseEngine;
-import org.apache.shardingsphere.core.parse.rule.registry.MasterSlaveParseRuleRegistry;
+import org.apache.shardingsphere.core.optimize.transparent.statement.TransparentOptimizedStatement;
+import org.apache.shardingsphere.core.parse.core.SQLParseKernel;
+import org.apache.shardingsphere.core.parse.core.rule.registry.ParseRuleRegistry;
 import org.apache.shardingsphere.core.parse.sql.statement.SQLStatement;
 import org.apache.shardingsphere.core.route.SQLRouteResult;
 import org.apache.shardingsphere.core.route.type.RoutingResult;
 import org.apache.shardingsphere.core.route.type.hint.DatabaseHintRoutingEngine;
 import org.apache.shardingsphere.core.rule.ShardingRule;
 import org.apache.shardingsphere.core.strategy.route.hint.HintShardingStrategy;
-import org.apache.shardingsphere.spi.DbType;
+import org.apache.shardingsphere.spi.database.DatabaseType;
 
 import java.util.List;
 
@@ -40,19 +41,19 @@ import java.util.List;
 @RequiredArgsConstructor
 public final class DatabaseHintSQLRouter implements ShardingRouter {
     
-    private final DbType databaseType;
+    private final DatabaseType databaseType;
     
     private final ShardingRule shardingRule;
     
     @Override
     public SQLStatement parse(final String logicSQL, final boolean useCache) {
-        return new SQLParseEngine(MasterSlaveParseRuleRegistry.getInstance(), databaseType, logicSQL, null, null).parse();
+        return new SQLParseKernel(ParseRuleRegistry.getInstance(), databaseType, logicSQL).parse();
     }
     
     @Override
     // TODO insert SQL need parse gen key
-    public SQLRouteResult route(final SQLStatement sqlStatement, final List<Object> parameters) {
-        SQLRouteResult result = new SQLRouteResult(sqlStatement);
+    public SQLRouteResult route(final String logicSQL, final List<Object> parameters, final SQLStatement sqlStatement) {
+        SQLRouteResult result = new SQLRouteResult(new TransparentOptimizedStatement(sqlStatement));
         RoutingResult routingResult = new DatabaseHintRoutingEngine(
                 shardingRule.getShardingDataSourceNames().getDataSourceNames(), (HintShardingStrategy) shardingRule.getDefaultDatabaseShardingStrategy()).route();
         result.setRoutingResult(routingResult);

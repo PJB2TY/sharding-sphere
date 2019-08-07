@@ -19,12 +19,10 @@ package org.apache.shardingsphere.shardingjdbc.jdbc.core.connection;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.apache.shardingsphere.core.parse.entry.EncryptSQLParseEntry;
-import org.apache.shardingsphere.core.rule.EncryptRule;
+import org.apache.shardingsphere.shardingjdbc.jdbc.core.context.EncryptRuntimeContext;
 import org.apache.shardingsphere.shardingjdbc.jdbc.core.statement.EncryptPreparedStatement;
 import org.apache.shardingsphere.shardingjdbc.jdbc.core.statement.EncryptStatement;
 import org.apache.shardingsphere.shardingjdbc.jdbc.unsupported.AbstractUnsupportedOperationConnection;
-import org.apache.shardingsphere.spi.DbType;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -43,13 +41,9 @@ import java.sql.Statement;
 @Getter
 public final class EncryptConnection extends AbstractUnsupportedOperationConnection {
     
-    private final DbType databaseType;
-    
     private final Connection connection;
     
-    private final EncryptRule encryptRule;
-    
-    private final EncryptSQLParseEntry parseEngine;
+    private final EncryptRuntimeContext runtimeContext;
     
     @Override
     public DatabaseMetaData getMetaData() throws SQLException {

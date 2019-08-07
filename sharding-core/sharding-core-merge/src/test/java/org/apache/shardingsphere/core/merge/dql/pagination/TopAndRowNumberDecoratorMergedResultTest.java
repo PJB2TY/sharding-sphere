@@ -18,19 +18,26 @@
 package org.apache.shardingsphere.core.merge.dql.pagination;
 
 import com.google.common.collect.Lists;
+import org.apache.shardingsphere.core.database.DatabaseTypes;
 import org.apache.shardingsphere.core.execute.sql.execute.result.QueryResult;
 import org.apache.shardingsphere.core.merge.MergedResult;
 import org.apache.shardingsphere.core.merge.dql.DQLMergeEngine;
 import org.apache.shardingsphere.core.merge.fixture.TestQueryResult;
-import org.apache.shardingsphere.core.optimize.condition.ShardingCondition;
-import org.apache.shardingsphere.core.optimize.condition.ShardingConditions;
-import org.apache.shardingsphere.core.optimize.pagination.Pagination;
-import org.apache.shardingsphere.core.optimize.result.OptimizeResult;
+import org.apache.shardingsphere.core.optimize.api.statement.OptimizedStatement;
+import org.apache.shardingsphere.core.optimize.encrypt.segment.condition.EncryptCondition;
+import org.apache.shardingsphere.core.optimize.sharding.segment.condition.ShardingCondition;
+import org.apache.shardingsphere.core.optimize.sharding.segment.select.groupby.GroupBy;
+import org.apache.shardingsphere.core.optimize.sharding.segment.select.item.SelectItem;
+import org.apache.shardingsphere.core.optimize.sharding.segment.select.item.SelectItems;
+import org.apache.shardingsphere.core.optimize.sharding.segment.select.orderby.OrderBy;
+import org.apache.shardingsphere.core.optimize.sharding.segment.select.orderby.OrderByItem;
+import org.apache.shardingsphere.core.optimize.sharding.segment.select.pagination.Pagination;
+import org.apache.shardingsphere.core.optimize.sharding.statement.dml.ShardingSelectOptimizedStatement;
 import org.apache.shardingsphere.core.parse.sql.segment.dml.pagination.limit.NumberLiteralLimitValueSegment;
 import org.apache.shardingsphere.core.parse.sql.segment.dml.pagination.rownum.NumberLiteralRowNumberValueSegment;
+import org.apache.shardingsphere.core.parse.sql.segment.generic.TableSegment;
 import org.apache.shardingsphere.core.parse.sql.statement.dml.SelectStatement;
 import org.apache.shardingsphere.core.route.SQLRouteResult;
-import org.apache.shardingsphere.spi.DatabaseTypes;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -52,8 +59,6 @@ public final class TopAndRowNumberDecoratorMergedResultTest {
     
     private List<QueryResult> queryResults;
     
-    private SQLRouteResult routeResult;
-    
     @Before
     public void setUp() throws SQLException {
         ResultSet resultSet = mock(ResultSet.class);
@@ -67,13 +72,15 @@ public final class TopAndRowNumberDecoratorMergedResultTest {
         for (ResultSet each : resultSets) {
             queryResults.add(new TestQueryResult(each));
         }
-        routeResult = new SQLRouteResult(new SelectStatement());
-        routeResult.setOptimizeResult(new OptimizeResult(new ShardingConditions(Collections.<ShardingCondition>emptyList())));
     }
     
     @Test
     public void assertNextForSkipAll() throws SQLException {
-        routeResult.getOptimizeResult().setPagination(new Pagination(new NumberLiteralRowNumberValueSegment(0, 0, Integer.MAX_VALUE, true), null, Collections.emptyList()));
+        OptimizedStatement optimizedStatement = new ShardingSelectOptimizedStatement(new SelectStatement(), Collections.<ShardingCondition>emptyList(), Collections.<EncryptCondition>emptyList(), 
+                new GroupBy(Collections.<OrderByItem>emptyList(), 0), new OrderBy(Collections.<OrderByItem>emptyList(), false), 
+                new SelectItems(0, 0, false, Collections.<SelectItem>emptyList(), Collections.<TableSegment>emptyList(), null),
+                new Pagination(new NumberLiteralRowNumberValueSegment(0, 0, Integer.MAX_VALUE, true), null, Collections.emptyList()));
+        SQLRouteResult routeResult = new SQLRouteResult(optimizedStatement);
         mergeEngine = new DQLMergeEngine(DatabaseTypes.getActualDatabaseType("SQLServer"), routeResult, queryResults);
         MergedResult actual = mergeEngine.merge();
         assertFalse(actual.next());
@@ -81,7 +88,11 @@ public final class TopAndRowNumberDecoratorMergedResultTest {
     
     @Test
     public void assertNextWithoutOffsetWithRowCount() throws SQLException {
-        routeResult.getOptimizeResult().setPagination(new Pagination(null, new NumberLiteralLimitValueSegment(0, 0, 5), Collections.emptyList()));
+        OptimizedStatement optimizedStatement = new ShardingSelectOptimizedStatement(new SelectStatement(), Collections.<ShardingCondition>emptyList(), Collections.<EncryptCondition>emptyList(),
+                new GroupBy(Collections.<OrderByItem>emptyList(), 0), new OrderBy(Collections.<OrderByItem>emptyList(), false),
+                new SelectItems(0, 0, false, Collections.<SelectItem>emptyList(), Collections.<TableSegment>emptyList(), null), 
+                new Pagination(null, new NumberLiteralLimitValueSegment(0, 0, 5), Collections.emptyList()));
+        SQLRouteResult routeResult = new SQLRouteResult(optimizedStatement);
         mergeEngine = new DQLMergeEngine(DatabaseTypes.getActualDatabaseType("SQLServer"), routeResult, queryResults);
         MergedResult actual = mergeEngine.merge();
         for (int i = 0; i < 5; i++) {
@@ -92,7 +103,11 @@ public final class TopAndRowNumberDecoratorMergedResultTest {
     
     @Test
     public void assertNextWithOffsetWithoutRowCount() throws SQLException {
-        routeResult.getOptimizeResult().setPagination(new Pagination(new NumberLiteralRowNumberValueSegment(0, 0, 2, true), null, Collections.emptyList()));
+        OptimizedStatement optimizedStatement = new ShardingSelectOptimizedStatement(new SelectStatement(), Collections.<ShardingCondition>emptyList(), Collections.<EncryptCondition>emptyList(),
+                new GroupBy(Collections.<OrderByItem>emptyList(), 0), new OrderBy(Collections.<OrderByItem>emptyList(), false),
+                new SelectItems(0, 0, false, Collections.<SelectItem>emptyList(), Collections.<TableSegment>emptyList(), null), 
+                new Pagination(new NumberLiteralRowNumberValueSegment(0, 0, 2, true), null, Collections.emptyList()));
+        SQLRouteResult routeResult = new SQLRouteResult(optimizedStatement);
         mergeEngine = new DQLMergeEngine(DatabaseTypes.getActualDatabaseType("SQLServer"), routeResult, queryResults);
         MergedResult actual = mergeEngine.merge();
         for (int i = 0; i < 7; i++) {
@@ -103,7 +118,11 @@ public final class TopAndRowNumberDecoratorMergedResultTest {
     
     @Test
     public void assertNextWithOffsetBoundOpenedFalse() throws SQLException {
-        routeResult.getOptimizeResult().setPagination(new Pagination(new NumberLiteralRowNumberValueSegment(0, 0, 2, false), new NumberLiteralLimitValueSegment(0, 0, 4), Collections.emptyList()));
+        OptimizedStatement optimizedStatement = new ShardingSelectOptimizedStatement(new SelectStatement(), Collections.<ShardingCondition>emptyList(), Collections.<EncryptCondition>emptyList(),
+                new GroupBy(Collections.<OrderByItem>emptyList(), 0), new OrderBy(Collections.<OrderByItem>emptyList(), false), 
+                new SelectItems(0, 0, false, Collections.<SelectItem>emptyList(), Collections.<TableSegment>emptyList(), null),
+                new Pagination(new NumberLiteralRowNumberValueSegment(0, 0, 2, false), new NumberLiteralLimitValueSegment(0, 0, 4), Collections.emptyList()));
+        SQLRouteResult routeResult = new SQLRouteResult(optimizedStatement);
         mergeEngine = new DQLMergeEngine(DatabaseTypes.getActualDatabaseType("SQLServer"), routeResult, queryResults);
         MergedResult actual = mergeEngine.merge();
         assertTrue(actual.next());
@@ -113,7 +132,11 @@ public final class TopAndRowNumberDecoratorMergedResultTest {
 
     @Test
     public void assertNextWithOffsetBoundOpenedTrue() throws SQLException {
-        routeResult.getOptimizeResult().setPagination(new Pagination(new NumberLiteralRowNumberValueSegment(0, 0, 2, true), new NumberLiteralLimitValueSegment(0, 0, 4), Collections.emptyList()));
+        OptimizedStatement optimizedStatement = new ShardingSelectOptimizedStatement(new SelectStatement(), Collections.<ShardingCondition>emptyList(), Collections.<EncryptCondition>emptyList(),
+                new GroupBy(Collections.<OrderByItem>emptyList(), 0), new OrderBy(Collections.<OrderByItem>emptyList(), false), 
+                new SelectItems(0, 0, false, Collections.<SelectItem>emptyList(), Collections.<TableSegment>emptyList(), null),
+                new Pagination(new NumberLiteralRowNumberValueSegment(0, 0, 2, true), new NumberLiteralLimitValueSegment(0, 0, 4), Collections.emptyList()));
+        SQLRouteResult routeResult = new SQLRouteResult(optimizedStatement);
         mergeEngine = new DQLMergeEngine(DatabaseTypes.getActualDatabaseType("SQLServer"), routeResult, queryResults);
         MergedResult actual = mergeEngine.merge();
         assertTrue(actual.next());

@@ -40,11 +40,8 @@ shardingRule:
           shardingColumn: order_id
           algorithmExpression: t_order_${order_id % 2}
       keyGenerator:
-        type: SNOWFLAKE
+        type: TEST-OPTIMIZE
         column: order_id
-        props:
-          worker.id: 123
-      logicIndex: order_index
     t_encrypt:
       actualDataNodes: ds_${0..1}.t_encrypt_${0..1}
       databaseStrategy:
@@ -56,10 +53,8 @@ shardingRule:
           shardingColumn: order_id
           algorithmExpression: t_encrypt_${order_id % 2}
       keyGenerator:
-        type: SNOWFLAKE
+        type: TEST-OPTIMIZE
         column: order_id
-        props:
-          worker.id: 123
     t_encrypt_query:
       actualDataNodes: ds_${0..1}.t_encrypt_query${0..1}
       databaseStrategy:
@@ -71,19 +66,23 @@ shardingRule:
           shardingColumn: order_id
           algorithmExpression: t_encrypt_query${order_id % 2}
       keyGenerator:
-        type: SNOWFLAKE
+        type: TEST-OPTIMIZE
         column: order_id
-        props:
-          worker.id: 123
   encryptRule:
     encryptors:
       t_encryptor:
         type: test
-        qualifiedColumns: t_encrypt.order_id
       t_query_encryptor:
         type: assistedTest
-        qualifiedColumns: t_encrypt_query.user_id
-        assistedQueryColumns: t_encrypt_query.assisted_user_id
-        
-        
-        
+    tables:
+      t_encrypt:
+        columns:
+          order_id:
+            cipherColumn: order_id
+            encryptor: t_encryptor
+      t_encrypt_query:
+        columns:
+          user_id:
+            cipherColumn: user_id
+            encryptor: t_query_encryptor
+            assistedQueryColumn: assisted_user_id

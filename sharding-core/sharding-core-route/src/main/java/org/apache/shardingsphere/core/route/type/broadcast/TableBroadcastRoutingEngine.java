@@ -18,8 +18,8 @@
 package org.apache.shardingsphere.core.route.type.broadcast;
 
 import lombok.RequiredArgsConstructor;
-import org.apache.shardingsphere.core.parse.sql.statement.SQLStatement;
-import org.apache.shardingsphere.core.parse.sql.statement.ddl.DDLStatement;
+import org.apache.shardingsphere.core.optimize.api.statement.OptimizedStatement;
+import org.apache.shardingsphere.core.optimize.sharding.statement.ddl.ShardingDropIndexOptimizedStatement;
 import org.apache.shardingsphere.core.route.type.RoutingEngine;
 import org.apache.shardingsphere.core.route.type.RoutingResult;
 import org.apache.shardingsphere.core.route.type.RoutingUnit;
@@ -29,7 +29,6 @@ import org.apache.shardingsphere.core.rule.ShardingRule;
 import org.apache.shardingsphere.core.rule.TableRule;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedList;
 
 /**
@@ -44,7 +43,7 @@ public final class TableBroadcastRoutingEngine implements RoutingEngine {
     
     private final ShardingRule shardingRule;
     
-    private final SQLStatement sqlStatement;
+    private final OptimizedStatement optimizedStatement;
     
     @Override
     public RoutingResult route() {
@@ -56,14 +55,8 @@ public final class TableBroadcastRoutingEngine implements RoutingEngine {
     }
     
     private Collection<String> getLogicTableNames() {
-        if (isOperateIndexWithoutTable()) {
-            return Collections.singletonList(shardingRule.getLogicTableName(((DDLStatement) sqlStatement).getIndexName()));
-        }
-        return sqlStatement.getTables().getTableNames();
-    }
-    
-    private boolean isOperateIndexWithoutTable() {
-        return sqlStatement instanceof DDLStatement && sqlStatement.getTables().isEmpty();
+        return optimizedStatement instanceof ShardingDropIndexOptimizedStatement
+                ? ((ShardingDropIndexOptimizedStatement) optimizedStatement).getTableNames() : optimizedStatement.getTables().getTableNames();
     }
     
     private Collection<RoutingUnit> getAllRoutingUnits(final String logicTableName) {
