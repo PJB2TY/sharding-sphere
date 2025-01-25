@@ -30,7 +30,6 @@ import org.apache.shardingsphere.infra.rewrite.SQLRewriteEntry;
 import org.apache.shardingsphere.infra.rewrite.engine.result.SQLRewriteResult;
 import org.apache.shardingsphere.infra.route.context.RouteContext;
 import org.apache.shardingsphere.infra.route.engine.SQLRouteEngine;
-import org.apache.shardingsphere.infra.session.connection.ConnectionContext;
 import org.apache.shardingsphere.infra.session.query.QueryContext;
 
 /**
@@ -45,33 +44,33 @@ public final class KernelProcessor {
      * @param queryContext query context
      * @param globalRuleMetaData global rule meta data
      * @param props configuration properties
-     * @param connectionContext connection context
      * @return execution context
      */
-    public ExecutionContext generateExecutionContext(final QueryContext queryContext, final RuleMetaData globalRuleMetaData,
-                                                     final ConfigurationProperties props, final ConnectionContext connectionContext) {
+    public ExecutionContext generateExecutionContext(final QueryContext queryContext, final RuleMetaData globalRuleMetaData, final ConfigurationProperties props) {
         check(queryContext);
-        RouteContext routeContext = route(queryContext, globalRuleMetaData, props, connectionContext);
-        SQLRewriteResult rewriteResult = rewrite(queryContext, globalRuleMetaData, props, routeContext, connectionContext);
+        RouteContext routeContext = route(queryContext, globalRuleMetaData, props);
+        SQLRewriteResult rewriteResult = rewrite(queryContext, globalRuleMetaData, props, routeContext);
         ExecutionContext result = createExecutionContext(queryContext, routeContext, rewriteResult);
         logSQL(queryContext, props, result);
         return result;
     }
     
     private void check(final QueryContext queryContext) {
+        if (queryContext.getHintValueContext().isSkipMetadataValidate()) {
+            return;
+        }
         ShardingSphereDatabase database = queryContext.getUsedDatabase();
-        new SupportedSQLCheckEngine().checkSQL(database.getRuleMetaData().getRules(), queryContext.getSqlStatementContext(), database.getSchemas(), database.getName());
+        new SupportedSQLCheckEngine().checkSQL(database.getRuleMetaData().getRules(), queryContext.getSqlStatementContext(), database);
     }
     
-    private RouteContext route(final QueryContext queryContext, final RuleMetaData globalRuleMetaData, final ConfigurationProperties props, final ConnectionContext connectionContext) {
+    private RouteContext route(final QueryContext queryContext, final RuleMetaData globalRuleMetaData, final ConfigurationProperties props) {
         ShardingSphereDatabase database = queryContext.getUsedDatabase();
-        return new SQLRouteEngine(database.getRuleMetaData().getRules(), props).route(connectionContext, queryContext, globalRuleMetaData, database);
+        return new SQLRouteEngine(database.getRuleMetaData().getRules(), props).route(queryContext, globalRuleMetaData, database);
     }
     
-    private SQLRewriteResult rewrite(final QueryContext queryContext, final RuleMetaData globalRuleMetaData, final ConfigurationProperties props, final RouteContext routeContext,
-                                     final ConnectionContext connectionContext) {
+    private SQLRewriteResult rewrite(final QueryContext queryContext, final RuleMetaData globalRuleMetaData, final ConfigurationProperties props, final RouteContext routeContext) {
         SQLRewriteEntry sqlRewriteEntry = new SQLRewriteEntry(queryContext.getUsedDatabase(), globalRuleMetaData, props);
-        return sqlRewriteEntry.rewrite(queryContext, routeContext, connectionContext);
+        return sqlRewriteEntry.rewrite(queryContext, routeContext);
     }
     
     private ExecutionContext createExecutionContext(final QueryContext queryContext, final RouteContext routeContext, final SQLRewriteResult rewriteResult) {

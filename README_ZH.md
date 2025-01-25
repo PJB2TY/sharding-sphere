@@ -63,7 +63,7 @@ Apache ShardingSphere 产品定位为 `Database Plus`，旨在构建异构数据
 
 ShardingSphere 已于 2020 年 4 月 16 日成为 [Apache 软件基金会](https://apache.org/index.html#projects-list)的顶级项目。
 
-迄今为止，已有超过 [10,000 个 GitHub 项目](https://github.com/search?l=Maven+POM&q=shardingsphere+language%3A%22Maven+POM%22&type=Code)采用了 ShardingSphere。
+迄今为止，已有超过 [15,000 个 GitHub 项目](https://github.com/search?l=Maven+POM&q=shardingsphere+language%3A%22Maven+POM%22&type=Code)采用了 ShardingSphere。
 
 ### 文档📜
 
@@ -108,13 +108,13 @@ ShardingSphere 已于 2020 年 4 月 16 日成为 [Apache 软件基金会](https
 
 <hr>
 
-:white_check_mark: Version 5.5.0: 已发布 :tada:
+:white_check_mark: Version 5.5.2: 已发布 :tada:
 
 🔗 请访问 [发布说明](https://github.com/apache/shardingsphere/blob/master/RELEASE-NOTES.md) 获得更详细的信息.
 
-:soon: Version 5.5.1
+:soon: Version 5.5.3
 
-我们目前正在开发 5.5.1 里程碑。
+我们目前正在开发 5.5.3 里程碑。
 请访问[里程碑](https://github.com/apache/shardingsphere/milestones) 获取最新信息。
 
 ##

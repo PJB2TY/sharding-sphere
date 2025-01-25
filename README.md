@@ -67,7 +67,7 @@ The concepts at the core of the project are `Connect`, `Enhance` and `Pluggable`
 
 ShardingSphere became an [Apache](https://apache.org/index.html#projects-list) Top-Level Project on April 16, 2020.
 
-So far, ShardingSphere has been used by over [10,000 projects on GitHub](https://github.com/search?l=Maven+POM&q=shardingsphere+language%3A%22Maven+POM%22&type=Code).
+So far, ShardingSphere has been used by over [15,000 projects on GitHub](https://github.com/search?l=Maven+POM&q=shardingsphere+language%3A%22Maven+POM%22&type=Code).
 
 ### DOCUMENTATION📜
 
@@ -114,25 +114,25 @@ We deeply appreciate [community contributors](https://shardingsphere.apache.org/
 
 <hr>
 
-:white_check_mark: Version 5.5.0: released :tada:
+:white_check_mark: Version 5.5.2: released :tada:
 
 🔗 For the release notes, follow this link to the relevant [GitHub page](https://github.com/apache/shardingsphere/blob/master/RELEASE-NOTES.md).
 
-:soon: Version 5.5.1
+:soon: Version 5.5.3
 
-We are currently working towards our 5.5.1 milestone.
+We are currently working towards our 5.5.3 milestone.
 Keep an eye on the [milestones page](https://github.com/apache/shardingsphere/milestones) of this repo to stay up to date.
 
 [comment]: <> (##)
 
 [comment]: <> (### NIGHTLY BUILDS:)
- 
+
 [comment]: <> (<hr>)
 
 [comment]: <> (A nightly build of ShardingSphere from the latest master branch is available. )
 
 [comment]: <> (The package is updated daily and is available [here]&#40;http://117.48.121.24:8080&#41;.)
- 
+
 [comment]: <> (##)
 
 [comment]: <> (**‼️ Notice:**)
@@ -144,7 +144,7 @@ Keep an eye on the [milestones page](https://github.com/apache/shardingsphere/mi
 [comment]: <> (The branch is not always fully tested. )
 
 [comment]: <> (The nightly build may contain bugs, and there may be new features added which may cause problems with your environment. )
- 
+
 ##
 
 ### How it Works
@@ -174,7 +174,7 @@ With the client end connecting directly to the database, it provides services in
 [![Docker Pulls](https://img.shields.io/docker/pulls/apache/shardingsphere-proxy.svg)](https://store.docker.com/community/images/apache/shardingsphere-proxy)
 
 A transparent database proxy, providing a database server that encapsulates the database binary protocol to support heterogeneous languages. 
-Friendlier to DBAs, the MySQL and PostgreSQL version now provided can use any kind of terminal.
+Friendlier to DBAs, the MariaDB, MySQL and PostgreSQL version now provided can use any kind of terminal.
 
 :link: For more details, follow this [link to the official website](https://shardingsphere.apache.org/document/current/en/overview/#shardingsphere-proxy).
 

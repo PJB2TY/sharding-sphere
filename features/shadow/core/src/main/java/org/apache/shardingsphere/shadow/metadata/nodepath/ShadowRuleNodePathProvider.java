@@ -18,8 +18,8 @@
 package org.apache.shardingsphere.shadow.metadata.nodepath;
 
 import org.apache.shardingsphere.infra.config.rule.RuleConfiguration;
-import org.apache.shardingsphere.mode.path.rule.RuleNodePath;
-import org.apache.shardingsphere.mode.spi.RuleNodePathProvider;
+import org.apache.shardingsphere.mode.node.path.rule.RuleNodePath;
+import org.apache.shardingsphere.mode.node.spi.RuleNodePathProvider;
 import org.apache.shardingsphere.shadow.config.ShadowRuleConfiguration;
 
 import java.util.Arrays;
@@ -40,8 +40,7 @@ public final class ShadowRuleNodePathProvider implements RuleNodePathProvider {
     
     public static final String DEFAULT_SHADOW_ALGORITHM_NAME = "default_shadow_algorithm_name";
     
-    private static final RuleNodePath INSTANCE = new RuleNodePath(RULE_TYPE, Arrays.asList(DATA_SOURCES, TABLES, SHADOW_ALGORITHMS),
-            Collections.singleton(DEFAULT_SHADOW_ALGORITHM_NAME));
+    private static final RuleNodePath INSTANCE = new RuleNodePath(RULE_TYPE, Arrays.asList(DATA_SOURCES, TABLES, SHADOW_ALGORITHMS), Collections.singleton(DEFAULT_SHADOW_ALGORITHM_NAME));
     
     @Override
     public RuleNodePath getRuleNodePath() {
