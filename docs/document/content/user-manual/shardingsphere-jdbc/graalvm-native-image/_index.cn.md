@@ -47,7 +47,7 @@ java.beans.Introspector was unintentionally initialized at build time. To see wh
             <plugin>
                 <groupId>org.graalvm.buildtools</groupId>
                 <artifactId>native-maven-plugin</artifactId>
-                <version>0.10.2</version>
+                <version>0.10.4</version>
                 <extensions>true</extensions>
                 <configuration>
                     <buildArgs>
@@ -85,12 +85,12 @@ java.beans.Introspector was unintentionally initialized at build time. To see wh
 
 ```groovy
 plugins {
-   id 'org.graalvm.buildtools.native' version '0.10.2'
+   id 'org.graalvm.buildtools.native' version '0.10.4'
 }
 
 dependencies {
    implementation 'org.apache.shardingsphere:shardingsphere-jdbc:${shardingsphere.version}'
-   implementation(group: 'org.graalvm.buildtools', name: 'graalvm-reachability-metadata', version: '0.10.2', classifier: 'repository', ext: 'zip')
+   implementation(group: 'org.graalvm.buildtools', name: 'graalvm-reachability-metadata', version: '0.10.4', classifier: 'repository', ext: 'zip')
 }
 
 graalvmNative {
@@ -251,57 +251,20 @@ Caused by: java.io.UnsupportedEncodingException: Codepage Cp1252 is not supporte
 ```json
 [
 {
-  "condition":{"typeReachable":"com.mysql.cj.jdbc.MysqlXADataSource"},
-  "name":"com.mysql.cj.jdbc.MysqlXADataSource",
-  "allDeclaredConstructors": true
+   "condition":{"typeReachable":"com.mysql.cj.jdbc.MysqlXADataSource"},
+   "name":"com.mysql.cj.jdbc.MysqlXADataSource",
+   "allPublicMethods": true,
+   "methods": [{"name":"<init>","parameterTypes":[] }]
 }
 ]
 ```
 
-6. 当使用 Seata 的 BASE 集成时，用户需要使用特定的 `io.seata:seata-all:1.8.0` 版本以避开对 ByteBuddy Java API 的使用，
-并排除 `io.seata:seata-all:1.8.0` 中过时的 `org.antlr:antlr4-runtime:4.8` 的 Maven 依赖。可能的配置例子如下，
-
-```xml
-<project>
-    <dependencies>
-      <dependency>
-         <groupId>org.apache.shardingsphere</groupId>
-         <artifactId>shardingsphere-jdbc</artifactId>
-         <version>${shardingsphere.version}</version>
-      </dependency>
-      <dependency>
-         <groupId>org.apache.shardingsphere</groupId>
-         <artifactId>shardingsphere-transaction-base-seata-at</artifactId>
-         <version>${shardingsphere.version}</version>
-      </dependency>
-      <dependency>
-         <groupId>io.seata</groupId>
-         <artifactId>seata-all</artifactId>
-         <version>1.8.0</version>
-         <exclusions>
-            <exclusion>
-               <groupId>org.antlr</groupId>
-               <artifactId>antlr4-runtime</artifactId>
-            </exclusion>
-            <exclusion>
-               <groupId>commons-lang</groupId>
-               <artifactId>commons-lang</artifactId>
-            </exclusion>
-            <exclusion>
-               <groupId>org.apache.commons</groupId>
-               <artifactId>commons-pool2</artifactId>
-            </exclusion>
-         </exclusions>
-      </dependency>
-    </dependencies>
-</project>
-```
-
-7. 当需要通过 ShardingSphere JDBC 使用 ClickHouse 方言时，
+6. 当需要通过 ShardingSphere JDBC 使用 ClickHouse 方言时，
 用户需要手动引入相关的可选模块和 classifier 为 `http` 的 ClickHouse JDBC 驱动。
 原则上，ShardingSphere 的 GraalVM Native Image 集成不希望使用 classifier 为 `all` 的 `com.clickhouse:clickhouse-jdbc`，
 因为 Uber Jar 会导致采集重复的 GraalVM Reachability Metadata。
 可能的配置例子如下，
+
 ```xml
 <project>
     <dependencies>
@@ -325,88 +288,9 @@ Caused by: java.io.UnsupportedEncodingException: Codepage Cp1252 is not supporte
 </project>
 ```
 
-ClickHouse 不支持 ShardingSphere 集成级别的本地事务，XA 事务和 Seata AT 模式事务，更多讨论位于 https://github.com/ClickHouse/clickhouse-docs/issues/2300 。
-
-7. 当需要通过 ShardingSphere JDBC 使用 Hive 方言时，受 https://issues.apache.org/jira/browse/HIVE-28308 影响，
-用户不应该使用 `classifier` 为 `standalone` 的 `org.apache.hive:hive-jdbc:4.0.0`，以避免依赖冲突。
-可能的配置例子如下，
-
-```xml
-<project>
-    <dependencies>
-       <dependency>
-         <groupId>org.apache.shardingsphere</groupId>
-         <artifactId>shardingsphere-jdbc</artifactId>
-         <version>${shardingsphere.version}</version>
-       </dependency>
-       <dependency>
-            <groupId>org.apache.shardingsphere</groupId>
-            <artifactId>shardingsphere-infra-database-hive</artifactId>
-            <version>${shardingsphere.version}</version>
-       </dependency>
-       <dependency>
-          <groupId>org.apache.shardingsphere</groupId>
-          <artifactId>shardingsphere-parser-sql-hive</artifactId>
-          <version>${shardingsphere.version}</version>
-       </dependency>
-       <dependency>
-          <groupId>org.apache.hive</groupId>
-          <artifactId>hive-jdbc</artifactId>
-          <version>4.0.0</version>
-       </dependency>
-       <dependency>
-          <groupId>org.apache.hive</groupId>
-          <artifactId>hive-service</artifactId>
-          <version>4.0.0</version>
-       </dependency>
-       <dependency>
-          <groupId>org.apache.hadoop</groupId>
-          <artifactId>hadoop-client-api</artifactId>
-          <version>3.3.6</version>
-       </dependency>
-    </dependencies>
-</project>
-```
-
-这会导致大量的依赖冲突。
-如果用户不希望手动解决潜在的数千行的依赖冲突，可以使用 HiveServer2 JDBC Driver 的 `Thin JAR` 的第三方构建。
-可能的配置例子如下，
-
-```xml
-<project>
-    <dependencies>
-       <dependency>
-         <groupId>org.apache.shardingsphere</groupId>
-         <artifactId>shardingsphere-jdbc</artifactId>
-         <version>${shardingsphere.version}</version>
-       </dependency>
-       <dependency>
-            <groupId>org.apache.shardingsphere</groupId>
-            <artifactId>shardingsphere-infra-database-hive</artifactId>
-            <version>${shardingsphere.version}</version>
-       </dependency>
-       <dependency>
-          <groupId>org.apache.shardingsphere</groupId>
-          <artifactId>shardingsphere-parser-sql-hive</artifactId>
-          <version>${shardingsphere.version}</version>
-       </dependency>
-       <dependency>
-          <groupId>io.github.linghengqian</groupId>
-          <artifactId>hive-server2-jdbc-driver-thin</artifactId>
-          <version>1.2.0</version>
-          <exclusions>
-             <exclusion>
-                <groupId>com.fasterxml.woodstox</groupId>
-                <artifactId>woodstox-core</artifactId>
-             </exclusion>
-          </exclusions>
-       </dependency>
-    </dependencies>
-</project>
-```
-
-受 https://github.com/grpc/grpc-java/issues/10601 影响，用户如果在项目中引入了 `org.apache.hive:hive-jdbc`，
+7. 受 https://github.com/grpc/grpc-java/issues/10601 影响，用户如果在项目中引入了 `org.apache.hive:hive-jdbc`，
 则需要在项目的 classpath 的 `META-INF/native-image/io.grpc/grpc-netty-shaded` 文件夹下创建包含如下内容的文件 `native-image.properties`，
+
 ```properties
 Args=--initialize-at-run-time=\
     io.grpc.netty.shaded.io.netty.channel.ChannelHandlerMask,\
@@ -438,51 +322,16 @@ Args=--initialize-at-run-time=\
     io.grpc.netty.shaded.io.netty.util.AttributeKey
 ```
 
-为了能够使用 `delete` 等 DML SQL 语句，当连接到 HiveServer2 时，
-用户应当考虑在 ShardingSphere JDBC 中仅使用支持 ACID 的表。`apache/hive` 提供了多种事务解决方案。
+ShardingSphere 的单元测试仅使用 Maven 模块 `io.github.linghengqian:hive-server2-jdbc-driver-thin` 来在 GraalVM Native Image 下验证可用性。
 
-第1种选择是使用 ACID 表，可能的建表流程如下。
-由于其过时的基于目录的表格式，用户可能不得不在 DML 语句执行前后进行等待，以让 HiveServer2 完成低效的 DML 操作。
+8. 由于 https://github.com/oracle/graal/issues/7979 的影响，
+对应 `com.oracle.database.jdbc:ojdbc8` Maven 模块的 Oracle JDBC Driver 无法在 GraalVM Native Image 下使用。
 
-```sql
-set metastore.compactor.initiator.on=true;
-set metastore.compactor.cleaner.on=true;
-set metastore.compactor.worker.threads=5;
+9. 由于 https://github.com/apache/doris/issues/9426 的影响，当通过 Shardinghere JDBC 连接至 Apache Doris FE，
+用户需自行提供 `apache/doris` 集成模块相关的 GraalVM Reachability Metadata。
 
-set hive.support.concurrency=true;
-set hive.exec.dynamic.partition.mode=nonstrict;
-set hive.txn.manager=org.apache.hadoop.hive.ql.lockmgr.DbTxnManager;
-
-CREATE TABLE IF NOT EXISTS t_order
-(
-    order_id   BIGINT,
-    order_type INT,
-    user_id    INT    NOT NULL,
-    address_id BIGINT NOT NULL,
-    status     VARCHAR(50),
-    PRIMARY KEY (order_id) disable novalidate
-) CLUSTERED BY (order_id) INTO 2 BUCKETS STORED AS ORC TBLPROPERTIES ('transactional' = 'true');
-```
-
-第2种选择是使用 Iceberg 表，可能的建表流程如下。
-Apache Iceberg 表格式有望在未来几年取代传统的 Hive 表格式，
-参考 https://blog.cloudera.com/from-hive-tables-to-iceberg-tables-hassle-free/ 。
-
-```sql
-set iceberg.mr.schema.auto.conversion=true;
-
-CREATE TABLE IF NOT EXISTS t_order
-(
-    order_id   BIGINT,
-    order_type INT,
-    user_id    INT    NOT NULL,
-    address_id BIGINT NOT NULL,
-    status     VARCHAR(50),
-    PRIMARY KEY (order_id) disable novalidate
-) STORED BY ICEBERG STORED AS ORC TBLPROPERTIES ('format-version' = '2');
-```
-
-HiveServer2 不支持 ShardingSphere 集成级别的本地事务，XA 事务和 Seata AT 模式事务，更多讨论位于 https://cwiki.apache.org/confluence/display/Hive/Hive+Transactions 。
+10. 由于 https://github.com/prestodb/presto/issues/23226 的影响，当通过 Shardinghere JDBC 连接至 Presto Server，
+用户需自行提供 `com.facebook.presto:presto-jdbc` 和 `prestodb/presto` 集成模块相关的 GraalVM Reachability Metadata。
 
 ## 贡献 GraalVM Reachability Metadata
 
@@ -496,13 +345,13 @@ ShardingSphere 定义了 `shardingsphere-test-native` 的 Maven Module 用于为
 
 ShardingSphere 定义了 `nativeTestInShardingSphere` 的 Maven Profile 用于为 `shardingsphere-test-native` 模块执行 nativeTest 。
 
+贡献者必须安装 Docker Engine 以执行 `testcontainers-java` 相关的单元测试，以 https://java.testcontainers.org/supported_docker_environment/ 为准。
+
 假设贡献者处于新的 Ubuntu 22.04.4 LTS 实例下，其可通过如下 bash 命令通过 SDKMAN! 管理 JDK 和工具链，
 并为 `shardingsphere-test-native` 子模块执行 nativeTest。
 
-你必须安装 Docker Engine 以执行 `testcontainers-java` 相关的单元测试。
-
 ```bash
-sudo apt install unzip zip curl sed -y
+sudo apt install unzip zip -y
 curl -s "https://get.sdkman.io" | bash
 source "$HOME/.sdkman/bin/sdkman-init.sh"
 sdk install java 22.0.2-graalce
@@ -511,7 +360,7 @@ sudo apt-get install build-essential zlib1g-dev -y
 
 git clone git@github.com:apache/shardingsphere.git
 cd ./shardingsphere/
-./mvnw -PnativeTestInShardingSphere -e clean test
+./mvnw -PnativeTestInShardingSphere -e -T 1C clean test
 ```
 
 当贡献者发现缺少与 ShardingSphere 无关的第三方库的 GraalVM Reachability Metadata 时，应当在
@@ -540,10 +389,32 @@ Reachability Metadata 位于 `shardingsphere-infra-reachability-metadata` 子模
 ```bash
 git clone git@github.com:apache/shardingsphere.git
 cd ./shardingsphere/
-./mvnw -PgenerateMetadata -DskipNativeTests -e clean test native:metadata-copy
+./mvnw -PgenerateMetadata -e -T 1C clean test native:metadata-copy
 ```
 
-在使用 GraalVM Native Build Tools 的 Maven Plugin 时，
-贡献者应避免使用 Maven 的并行构建功能。
-GraalVM Native Build Tools 的 Maven Plugin并不是线程安全的，
-它与 https://cwiki.apache.org/confluence/display/MAVEN/Parallel+builds+in+Maven+3 不兼容。
+受 https://github.com/apache/shardingsphere/issues/33206 影响，
+贡献者执行 `./mvnw -PgenerateMetadata -T 1C -e clean test native:metadata-copy` 后，
+`infra/reachability-metadata/src/main/resources/META-INF/native-image/org.apache.shardingsphere/generated-reachability-metadata/resource-config.json` 会生成不必要的包含绝对路径的 JSON 条目，
+类似如下，
+
+```json
+{
+   "resources":{
+      "includes":[{
+         "condition":{"typeReachable":"org.apache.shardingsphere.proxy.backend.config.ProxyConfigurationLoader"},
+         "pattern":"\\Qhome/runner/work/shardingsphere/shardingsphere/test/native/src/test/resources/test-native/yaml/proxy/databases/postgresql//global.yaml\\E"
+      }, {
+         "condition":{"typeReachable":"org.apache.shardingsphere.proxy.backend.config.ProxyConfigurationLoader"},
+         "pattern":"\\Qhome/runner/work/shardingsphere/shardingsphere/test/native/src/test/resources/test-native/yaml/proxy/databases/postgresql/\\E"
+      }, {
+         "condition":{"typeReachable":"org.apache.shardingsphere.proxy.backend.config.ProxyConfigurationLoader"},
+         "pattern":"\\Qhome/runner/work/shardingsphere/shardingsphere/test/native/src/test/resources/test-native/yaml/proxy/features/sharding//global.yaml\\E"
+      }, {
+         "condition":{"typeReachable":"org.apache.shardingsphere.proxy.backend.config.ProxyConfigurationLoader"},
+         "pattern":"\\Qhome/runner/work/shardingsphere/shardingsphere/test/native/src/test/resources/test-native/yaml/proxy/features/sharding/\\E"
+      }]},
+   "bundles":[]
+}
+```
+
+贡献者应始终手动删除这些包含绝对路径的 JSON 条目，并等待 https://github.com/oracle/graal/issues/8417 被解决。

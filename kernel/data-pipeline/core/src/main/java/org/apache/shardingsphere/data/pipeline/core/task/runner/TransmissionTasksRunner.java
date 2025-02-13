@@ -35,7 +35,6 @@ import org.apache.shardingsphere.data.pipeline.core.job.type.PipelineJobType;
 import org.apache.shardingsphere.data.pipeline.core.task.PipelineTask;
 import org.apache.shardingsphere.infra.exception.core.ShardingSpherePreconditions;
 import org.apache.shardingsphere.infra.spi.type.typed.TypedSPILoader;
-import org.apache.shardingsphere.infra.util.close.QuietlyCloser;
 
 import java.util.Collection;
 import java.util.LinkedList;
@@ -80,7 +79,7 @@ public final class TransmissionTasksRunner implements PipelineTasksRunner {
     }
     
     private synchronized void executeInventoryTasks() {
-        updateJobItemStatus(JobStatus.EXECUTE_INVENTORY_TASK);
+        updateLocalAndRemoteJobItemStatusForInventory();
         Collection<CompletableFuture<?>> futures = new LinkedList<>();
         for (PipelineTask each : inventoryTasks) {
             if (each.getTaskProgress().getPosition() instanceof IngestFinishedPosition) {
@@ -89,6 +88,11 @@ public final class TransmissionTasksRunner implements PipelineTasksRunner {
             futures.addAll(each.start());
         }
         PipelineExecuteEngine.trigger(futures, new InventoryTaskExecuteCallback());
+    }
+    
+    private void updateLocalAndRemoteJobItemStatusForInventory() {
+        jobItemContext.setStatus(JobStatus.EXECUTE_INVENTORY_TASK);
+        jobItemManager.updateStatus(jobItemContext.getJobId(), jobItemContext.getShardingItem(), JobStatus.EXECUTE_INVENTORY_TASK);
     }
     
     private synchronized void executeIncrementalTasks() {
@@ -101,7 +105,6 @@ public final class TransmissionTasksRunner implements PipelineTasksRunner {
             log.info("Incremental tasks had already run, ignore.");
             return;
         }
-        updateJobItemStatus(JobStatus.EXECUTE_INCREMENTAL_TASK);
         Collection<CompletableFuture<?>> futures = new LinkedList<>();
         for (PipelineTask each : incrementalTasks) {
             if (each.getTaskProgress().getPosition() instanceof IngestFinishedPosition) {
@@ -109,25 +112,20 @@ public final class TransmissionTasksRunner implements PipelineTasksRunner {
             }
             futures.addAll(each.start());
         }
+        updateLocalAndRemoteJobItemProgressForIncremental();
         PipelineExecuteEngine.trigger(futures, new IncrementalExecuteCallback());
     }
     
-    private void updateJobItemStatus(final JobStatus jobStatus) {
-        jobItemContext.setStatus(jobStatus);
-        jobItemManager.updateStatus(jobItemContext.getJobId(), jobItemContext.getShardingItem(), jobStatus);
+    private void updateLocalAndRemoteJobItemProgressForIncremental() {
+        jobItemContext.setStatus(JobStatus.EXECUTE_INCREMENTAL_TASK);
+        jobItemManager.updateProgress(jobItemContext);
     }
     
     @Override
     public void stop() {
         jobItemContext.setStopping(true);
-        for (PipelineTask each : inventoryTasks) {
-            each.stop();
-            QuietlyCloser.close(each);
-        }
-        for (PipelineTask each : incrementalTasks) {
-            each.stop();
-            QuietlyCloser.close(each);
-        }
+        inventoryTasks.forEach(PipelineTask::stop);
+        incrementalTasks.forEach(PipelineTask::stop);
     }
     
     private final class InventoryTaskExecuteCallback implements ExecuteCallback {

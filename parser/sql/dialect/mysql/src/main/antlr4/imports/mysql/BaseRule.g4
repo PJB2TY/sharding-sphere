@@ -63,6 +63,7 @@ customKeyword
     | MAXVALUE
     | BIT_XOR
     | MYSQL_MAIN
+    | RANGE
     | UTC_DATE
     | UTC_TIME
     | UTC_TIMESTAMP
@@ -84,7 +85,7 @@ string_
     ;
 
 stringLiterals
-    : (UNDERSCORE_CHARSET | UL_BINARY )? string_ | NCHAR_TEXT
+    : (UNDERSCORE_CHARSET | UL_BINARY )? string_+ | NCHAR_TEXT
     ;
 
 numberLiterals
@@ -145,10 +146,13 @@ identifierKeywordsUnambiguous
     | ATTRIBUTE
     | AUTOEXTEND_SIZE
     | AUTO_INCREMENT
+    | AUTHENTICATION
+    | AUTO
     | AVG_ROW_LENGTH
     | AVG
     | BACKUP
     | BEFORE
+    | BERNOULLI
     | BINLOG
     | BIT
     | BLOCK
@@ -156,9 +160,11 @@ identifierKeywordsUnambiguous
     | BOOL
     | BTREE
     | BUCKETS
+    | BULK
     | CASCADED
     | CATALOG_NAME
     | CHAIN
+    | CHALLENGE_RESPONSE
     | CHANGED
     | CHANNEL
     | CIPHER
@@ -229,11 +235,13 @@ identifierKeywordsUnambiguous
     | EXPORT
     | EXTENDED
     | EXTENT_SIZE
+    | FACTOR
     | FAILED_LOGIN_ATTEMPTS
     | FAST
     | FAULTS
     | FILE_BLOCK_SIZE
     | FILTER
+    | FINISH
     | FIRST
     | FIXED
     | FOLLOWING
@@ -248,6 +256,7 @@ identifierKeywordsUnambiguous
     | GRANTS
     | GROUP_REPLICATION
     | GROUPS
+    | GTIDS
     | HASH
     | HISTOGRAM
     | HISTORY
@@ -258,6 +267,7 @@ identifierKeywordsUnambiguous
     | IGNORE_SERVER_IDS
     | INACTIVE
     | INDEXES
+    | INITIAL
     | INITIAL_SIZE
     | INSERT_METHOD
     | INSTANCE
@@ -272,6 +282,8 @@ identifierKeywordsUnambiguous
     | KEY
     | KEYS
     | KEY_BLOCK_SIZE
+    | KEYRING
+    | KILL
     | LAST
     | LEAVES
     | LESS
@@ -282,6 +294,10 @@ identifierKeywordsUnambiguous
     | LOCKS
     | LOGFILE
     | LOGS
+    | LOOP
+    | MANUAL
+    | MATCH
+    | MAXVALUE
     | MASTER_AUTO_POSITION
     | MASTER_COMPRESSION_ALGORITHM
     | MASTER_CONNECT_RETRY
@@ -326,6 +342,7 @@ identifierKeywordsUnambiguous
     | MIN_ROWS
     | MODE
     | MODIFY
+    | MODIFIES
     | MONTH
     | MULTILINESTRING
     | MULTIPOINT
@@ -335,6 +352,7 @@ identifierKeywordsUnambiguous
     | NAMES
     | NAME
     | NATIONAL
+    | NATURAL
     | NCHAR
     | NDBCLUSTER
     | NESTED
@@ -347,6 +365,7 @@ identifierKeywordsUnambiguous
     | NULLS
     | NUMBER
     | NVARCHAR
+    | OF
     | OFF
     | OFFSET
     | OJ
@@ -364,6 +383,7 @@ identifierKeywordsUnambiguous
     | PAGE
     | PARSER
     | PARTIAL
+    | PARSE_TREE
     | PARTITIONING
     | PARTITIONS
     | PASSWORD
@@ -384,6 +404,7 @@ identifierKeywordsUnambiguous
     | PROCESSLIST
     | PROFILES
     | PROFILE
+    | QUALIFY
     | QUARTER
     | QUERY
     | QUICK
@@ -417,6 +438,7 @@ identifierKeywordsUnambiguous
     | RESTORE
     | RESUME
     | RETAIN
+    | REGISTRATION
     | RETURNED_SQLSTATE
     | RETURNING
     | RETURNS
@@ -429,6 +451,7 @@ identifierKeywordsUnambiguous
     | ROW_COUNT
     | ROW_FORMAT
     | RTREE
+    | S3
     | SCHEDULE
     | SCHEMA_NAME
     | SECONDARY_ENGINE
@@ -503,6 +526,7 @@ identifierKeywordsUnambiguous
     | UNKNOWN
     | UNTIL
     | UPGRADE
+    | URL
     | USER
     | USE_FRM
     | VALIDATION
@@ -525,6 +549,7 @@ identifierKeywordsUnambiguous
     | YEAR_MONTH
     | CONDITION
     | DESCRIBE
+    | ZONE
     ;
 
 identifierKeywordsAmbiguous1RolesAndLabels
@@ -698,7 +723,7 @@ newColumn
 
 delimiterName
     : textOrIdentifier | ('\\'. | ~('\'' | '"' | '`' | '\\'))+
-    ; 
+    ;
 
 userIdentifierOrText
     : textOrIdentifier (AT_ textOrIdentifier)?
@@ -714,7 +739,7 @@ eventName
 
 serverName
     : textOrIdentifier
-    ; 
+    ;
 
 wrapperName
     : textOrIdentifier
@@ -931,6 +956,7 @@ simpleExpr
     | matchExpression
     | caseExpression
     | intervalExpression
+    | implicitConcat
     ;
 
 path
@@ -954,15 +980,23 @@ columnRefList
     ;
 
 functionCall
-    : aggregationFunction | specialFunction | jsonFunction | regularFunction | udfFunction
+    : aggregationFunction | specialFunction | jsonFunction | regularFunction | udfFunction | specialAnalysisFunction
     ;
 
 udfFunction
     : functionName LP_ (expr? | expr (COMMA_ expr)*) RP_
     ;
 
+separatorName
+    : SEPARATOR string_
+    ;
+
+aggregationExpression
+    : expr (COMMA_ expr)* | ASTERISK_
+    ;
+
 aggregationFunction
-    : aggregationFunctionName LP_ distinct? (expr (COMMA_ expr)* | ASTERISK_)? collateClause? RP_ overClause?
+    : aggregationFunctionName LP_ (distinct | all)? aggregationExpression? collateClause? separatorName? RP_ overClause?
     ;
 
 jsonFunction
@@ -1008,6 +1042,10 @@ aggregationFunctionName
 
 distinct
     : DISTINCT
+    ;
+
+all
+    : ALL
     ;
 
 overClause
@@ -1119,6 +1157,7 @@ castType
     | castTypeName = REAL
     | castTypeName = DOUBLE PRECISION
     | castTypeName = FLOAT precision?
+    | castTypeName = YEAR
     ;
 
 positionFunction
@@ -1176,8 +1215,16 @@ regularFunctionName
     : IF | LOCALTIME | LOCALTIMESTAMP | REPLACE | INSERT | INTERVAL | MOD
     | DATABASE | SCHEMA | LEFT | RIGHT | DATE | DAY | GEOMETRYCOLLECTION | REPEAT
     | LINESTRING | MULTILINESTRING | MULTIPOINT | MULTIPOLYGON | POINT | POLYGON
-    | TIME | TIMESTAMP | TIMESTAMP_ADD | TIMESTAMP_DIFF | DATE | CURRENT_TIMESTAMP 
+    | TIME | TIMESTAMP | TIMESTAMP_ADD | TIMESTAMP_DIFF | DATE | CURRENT_TIMESTAMP
     | CURRENT_DATE | CURRENT_TIME | UTC_TIMESTAMP | identifier
+    ;
+
+specialAnalysisFunction
+    : geomCollectionFunction
+    ;
+
+geomCollectionFunction
+    : GEOMCOLLECTION LP_ expr (COMMA_ expr)* RP_
     ;
 
 matchExpression
@@ -1210,6 +1257,10 @@ caseElse
 
 intervalExpression
     : INTERVAL intervalValue
+    ;
+
+implicitConcat
+    : string_ (string_)*
     ;
 
 intervalValue

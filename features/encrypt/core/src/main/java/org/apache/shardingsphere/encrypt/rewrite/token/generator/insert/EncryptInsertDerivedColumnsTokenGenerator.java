@@ -34,6 +34,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Insert derived columns token generator for encrypt.
@@ -43,7 +44,7 @@ import java.util.List;
 @Setter
 public final class EncryptInsertDerivedColumnsTokenGenerator implements CollectionSQLTokenGenerator<InsertStatementContext> {
     
-    private final EncryptRule encryptRule;
+    private final EncryptRule rule;
     
     @Override
     public boolean isGenerateSQLToken(final SQLStatementContext sqlStatementContext) {
@@ -52,12 +53,15 @@ public final class EncryptInsertDerivedColumnsTokenGenerator implements Collecti
     
     @Override
     public Collection<SQLToken> generateSQLTokens(final InsertStatementContext insertStatementContext) {
+        Optional<EncryptTable> encryptTable = rule.findEncryptTable(insertStatementContext.getSqlStatement().getTable().map(optional -> optional.getTableName().getIdentifier().getValue()).orElse(""));
+        if (!encryptTable.isPresent()) {
+            return Collections.emptyList();
+        }
         Collection<SQLToken> result = new LinkedList<>();
-        EncryptTable encryptTable = encryptRule.getEncryptTable(insertStatementContext.getSqlStatement().getTable().map(optional -> optional.getTableName().getIdentifier().getValue()).orElse(""));
         for (ColumnSegment each : insertStatementContext.getSqlStatement().getColumns()) {
-            List<String> derivedColumnNames = getDerivedColumnNames(encryptTable, each);
+            List<String> derivedColumnNames = getDerivedColumnNames(encryptTable.get(), each);
             if (!derivedColumnNames.isEmpty()) {
-                result.add(new InsertColumnsToken(each.getStopIndex() + 1, derivedColumnNames));
+                result.add(new InsertColumnsToken(each.getStopIndex() + 1, derivedColumnNames, each.getIdentifier().getQuoteCharacter()));
             }
         }
         return result;

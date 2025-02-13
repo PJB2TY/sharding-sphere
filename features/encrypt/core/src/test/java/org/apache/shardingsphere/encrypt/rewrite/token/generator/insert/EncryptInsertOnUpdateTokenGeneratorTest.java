@@ -23,6 +23,7 @@ import org.apache.shardingsphere.encrypt.rule.column.EncryptColumn;
 import org.apache.shardingsphere.encrypt.rule.table.EncryptTable;
 import org.apache.shardingsphere.infra.binder.context.statement.dml.InsertStatementContext;
 import org.apache.shardingsphere.infra.binder.context.statement.dml.SelectStatementContext;
+import org.apache.shardingsphere.infra.metadata.database.ShardingSphereDatabase;
 import org.apache.shardingsphere.infra.rewrite.sql.token.common.pojo.SQLToken;
 import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.assignment.ColumnAssignmentSegment;
 import org.apache.shardingsphere.sql.parser.statement.core.segment.dml.column.ColumnSegment;
@@ -58,7 +59,7 @@ class EncryptInsertOnUpdateTokenGeneratorTest {
     
     @BeforeEach
     void setup() {
-        generator = new EncryptInsertOnUpdateTokenGenerator(mockEncryptRule());
+        generator = new EncryptInsertOnUpdateTokenGenerator(mockEncryptRule(), mock(ShardingSphereDatabase.class));
     }
     
     private EncryptRule mockEncryptRule() {

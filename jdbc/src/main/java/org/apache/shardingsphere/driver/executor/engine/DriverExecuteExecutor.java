@@ -24,6 +24,7 @@ import org.apache.shardingsphere.driver.executor.callback.execute.StatementExecu
 import org.apache.shardingsphere.driver.executor.callback.replay.StatementReplayCallback;
 import org.apache.shardingsphere.driver.executor.engine.pushdown.jdbc.DriverJDBCPushDownExecuteExecutor;
 import org.apache.shardingsphere.driver.executor.engine.pushdown.raw.DriverRawPushDownExecuteExecutor;
+import org.apache.shardingsphere.driver.executor.engine.transaction.DriverTransactionSQLStatementExecutor;
 import org.apache.shardingsphere.driver.jdbc.core.connection.ShardingSphereConnection;
 import org.apache.shardingsphere.infra.binder.context.statement.SQLStatementContext;
 import org.apache.shardingsphere.infra.connection.kernel.KernelProcessor;
@@ -36,7 +37,8 @@ import org.apache.shardingsphere.infra.metadata.ShardingSphereMetaData;
 import org.apache.shardingsphere.infra.metadata.database.ShardingSphereDatabase;
 import org.apache.shardingsphere.infra.rule.attribute.raw.RawExecutionRuleAttribute;
 import org.apache.shardingsphere.infra.session.query.QueryContext;
-import org.apache.shardingsphere.mode.metadata.refresher.MetaDataRefreshEngine;
+import org.apache.shardingsphere.mode.metadata.refresher.metadata.federation.FederationMetaDataRefreshEngine;
+import org.apache.shardingsphere.sql.parser.statement.core.statement.tcl.TCLStatement;
 import org.apache.shardingsphere.sqlfederation.engine.SQLFederationEngine;
 import org.apache.shardingsphere.sqlfederation.executor.context.SQLFederationContext;
 
@@ -63,15 +65,19 @@ public final class DriverExecuteExecutor {
     
     private final SQLFederationEngine sqlFederationEngine;
     
+    private final DriverTransactionSQLStatementExecutor transactionExecutor;
+    
     private ExecuteType executeType;
     
     public DriverExecuteExecutor(final ShardingSphereConnection connection, final ShardingSphereMetaData metaData,
-                                 final JDBCExecutor jdbcExecutor, final RawExecutor rawExecutor, final SQLFederationEngine sqlFederationEngine) {
+                                 final JDBCExecutor jdbcExecutor, final RawExecutor rawExecutor, final SQLFederationEngine sqlFederationEngine,
+                                 final DriverTransactionSQLStatementExecutor transactionExecutor) {
         this.connection = connection;
         this.metaData = metaData;
         jdbcPushDownExecutor = new DriverJDBCPushDownExecuteExecutor(connection, metaData, jdbcExecutor);
         rawPushDownExecutor = new DriverRawPushDownExecuteExecutor(connection, metaData, rawExecutor);
         this.sqlFederationEngine = sqlFederationEngine;
+        this.transactionExecutor = transactionExecutor;
     }
     
     /**
@@ -95,18 +101,17 @@ public final class DriverExecuteExecutor {
                     new ExecuteQueryCallbackFactory(prepareEngine.getType()).newInstance(database, queryContext), new SQLFederationContext(false, queryContext, metaData, connection.getProcessId()));
             return null != resultSet;
         }
-        MetaDataRefreshEngine metaDataRefreshEngine = getMetaDataRefreshEngine(database);
-        if (sqlFederationEngine.enabled() && metaDataRefreshEngine.isFederation(queryContext.getSqlStatementContext())) {
-            metaDataRefreshEngine.refresh(queryContext.getSqlStatementContext());
+        FederationMetaDataRefreshEngine federationMetaDataRefreshEngine = new FederationMetaDataRefreshEngine(
+                connection.getContextManager().getPersistServiceFacade().getMetaDataManagerPersistService(), database);
+        if (sqlFederationEngine.enabled() && federationMetaDataRefreshEngine.isNeedRefresh(queryContext.getSqlStatementContext())) {
+            federationMetaDataRefreshEngine.refresh(queryContext.getSqlStatementContext());
             return true;
         }
-        ExecutionContext executionContext =
-                new KernelProcessor().generateExecutionContext(queryContext, metaData.getGlobalRuleMetaData(), metaData.getProps(), connection.getDatabaseConnectionManager().getConnectionContext());
+        if (transactionExecutor.decide(queryContext)) {
+            return transactionExecutor.execute((TCLStatement) queryContext.getSqlStatementContext().getSqlStatement());
+        }
+        ExecutionContext executionContext = new KernelProcessor().generateExecutionContext(queryContext, metaData.getGlobalRuleMetaData(), metaData.getProps());
         return executePushDown(database, executionContext, prepareEngine, executeCallback, addCallback, replayCallback);
-    }
-    
-    private MetaDataRefreshEngine getMetaDataRefreshEngine(final ShardingSphereDatabase database) {
-        return new MetaDataRefreshEngine(connection.getContextManager().getPersistServiceFacade().getMetaDataManagerPersistService(), database, metaData.getProps());
     }
     
     @SuppressWarnings("rawtypes")

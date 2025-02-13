@@ -4,12 +4,12 @@
 
     {"excludeClasses": "android.app.**"},
     {"excludeClasses": "com.**"},
-    {"excludeClasses": "ch.qos.logback.classic.**"},
+    {"includeClasses": "com.oracle.svm.core.**"},
+    {"includeClasses": "com.sun.management.**"},
+    {"includeClasses": "com.sun.security.auth.UnixPrincipal"},
+    {"excludeClasses": "ch.qos.logback.**"},
     {"excludeClasses": "groovy.**"},
     {"excludeClasses": "io.**"},
-    {"excludeClasses": "java.**"},
-    {"includeClasses": "java.util.Properties"},
-    {"includeClasses": "java.util.ServiceLoader"},
     {"excludeClasses": "javax.**"},
     {"excludeClasses": "jdk.internal.misc.**"},
     {"excludeClasses": "libcore.io.**"},
@@ -17,6 +17,8 @@
     {"excludeClasses": "org.**"},
     {"includeClasses": "org.apache.shardingsphere.**"},
     {"excludeClasses": "sun.**"},
+    {"includeClasses": "sun.security.provider.ConfigFile"},
+    {"includeClasses": "sun.security.provider.SecureRandom"},
 
     {"excludeClasses": "org.apache.shardingsphere.test.natived.**"}
   ],

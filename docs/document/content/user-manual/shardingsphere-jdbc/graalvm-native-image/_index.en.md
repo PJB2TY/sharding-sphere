@@ -20,7 +20,7 @@ https://sdkman.io/jdks#nik and https://sdkman.io/jdks#mandrel .
 
 Users can still use the old versions of GraalVM CE such as `21.0.2-graalce` on SDKMAN! to build the GraalVM Native Image product of ShardingSphere. 
 However, this will cause the failure of building the GraalVM Native Image when integrating some third-party dependencies. 
-A typical example is related to the `org.apache.hive:hive-jdbc:4.0.0` HiveServer2 JDBC Driver, which uses AWT-related classes. 
+A typical example is related to the `org.apache.hive:hive-jdbc:4.0.1` HiveServer2 JDBC Driver, which uses AWT-related classes. 
 GraalVM CE only supports AWT for GraalVM CE For JDK22 and higher versions.
 
 ```shell
@@ -49,7 +49,7 @@ and the documentation of GraalVM Native Build Tools shall prevail.
              <plugin>
                  <groupId>org.graalvm.buildtools</groupId>
                  <artifactId>native-maven-plugin</artifactId>
-                 <version>0.10.2</version>
+                 <version>0.10.4</version>
                  <extensions>true</extensions>
                  <configuration>
                     <buildArgs>
@@ -89,12 +89,12 @@ Reference https://github.com/graalvm/native-build-tools/issues/572 .
 
 ```groovy
 plugins {
-   id 'org.graalvm.buildtools.native' version '0.10.2'
+   id 'org.graalvm.buildtools.native' version '0.10.4'
 }
 
 dependencies {
    implementation 'org.apache.shardingsphere:shardingsphere-jdbc:${shardingsphere.version}'
-   implementation(group: 'org.graalvm.buildtools', name: 'graalvm-reachability-metadata', version: '0.10.2', classifier: 'repository', ext: 'zip')
+   implementation(group: 'org.graalvm.buildtools', name: 'graalvm-reachability-metadata', version: '0.10.4', classifier: 'repository', ext: 'zip')
 }
 
 graalvmNative {
@@ -264,59 +264,20 @@ to define the constructor of `com.mysql.cj.jdbc.MysqlXADataSource` inside the Gr
 ```json
 [
 {
-"condition":{"typeReachable":"com.mysql.cj.jdbc.MysqlXADataSource"},
-"name":"com.mysql.cj.jdbc.MysqlXADataSource",
-"allDeclaredConstructors": true
+   "condition":{"typeReachable":"com.mysql.cj.jdbc.MysqlXADataSource"},
+   "name":"com.mysql.cj.jdbc.MysqlXADataSource",
+   "allPublicMethods": true,
+   "methods": [{"name":"<init>","parameterTypes":[] }]
 }
 ]
 ```
 
-6. When using Seata's BASE integration, 
-users need to use a specific `io.seata:seata-all:1.8.0` version to avoid using the ByteBuddy Java API,
-and exclude the outdated Maven dependency of `org.antlr:antlr4-runtime:4.8` in `io.seata:seata-all:1.8.0`.
-Possible configuration examples are as follows,
-
-```xml
-<project>
-    <dependencies>
-      <dependency>
-         <groupId>org.apache.shardingsphere</groupId>
-         <artifactId>shardingsphere-jdbc</artifactId>
-         <version>${shardingsphere.version}</version>
-      </dependency>
-      <dependency>
-         <groupId>org.apache.shardingsphere</groupId>
-         <artifactId>shardingsphere-transaction-base-seata-at</artifactId>
-         <version>${shardingsphere.version}</version>
-      </dependency>
-      <dependency>
-         <groupId>io.seata</groupId>
-         <artifactId>seata-all</artifactId>
-         <version>1.8.0</version>
-         <exclusions>
-            <exclusion>
-               <groupId>org.antlr</groupId>
-               <artifactId>antlr4-runtime</artifactId>
-            </exclusion>
-            <exclusion>
-               <groupId>commons-lang</groupId>
-               <artifactId>commons-lang</artifactId>
-            </exclusion>
-            <exclusion>
-               <groupId>org.apache.commons</groupId>
-               <artifactId>commons-pool2</artifactId>
-            </exclusion>
-         </exclusions>
-      </dependency>
-    </dependencies>
-</project>
-```
-
-7. When using the ClickHouse dialect through ShardingSphere JDBC, 
+6. When using the ClickHouse dialect through ShardingSphere JDBC, 
 users need to manually introduce the relevant optional modules and the ClickHouse JDBC driver with the classifier `http`.
 In principle, ShardingSphere's GraalVM Native Image integration does not want to use `com.clickhouse:clickhouse-jdbc` with classifier `all`, 
 because Uber Jar will cause the collection of duplicate GraalVM Reachability Metadata.
 Possible configuration examples are as follows,
+
 ```xml
 <project>
     <dependencies>
@@ -339,91 +300,11 @@ Possible configuration examples are as follows,
     </dependencies>
 </project>
 ```
-ClickHouse does not support local transactions, XA transactions, and Seata AT mode transactions at the ShardingSphere integration level. 
-More discussion is at https://github.com/ClickHouse/clickhouse-docs/issues/2300 .
 
-7. When using the Hive dialect through ShardingSphere JDBC, affected by https://issues.apache.org/jira/browse/HIVE-28308 ,
-   users should not use `org.apache.hive:hive-jdbc:4.0.0` with `classifier` as `standalone` to avoid dependency conflicts.
-   Possible configuration examples are as follows,
-
-```xml
-<project>
-   <dependencies>
-      <dependency>
-         <groupId>org.apache.shardingsphere</groupId>
-         <artifactId>shardingsphere-jdbc</artifactId>
-         <version>${shardingsphere.version}</version>
-      </dependency>
-      <dependency>
-         <groupId>org.apache.shardingsphere</groupId>
-         <artifactId>shardingsphere-infra-database-hive</artifactId>
-         <version>${shardingsphere.version}</version>
-      </dependency>
-      <dependency>
-         <groupId>org.apache.shardingsphere</groupId>
-         <artifactId>shardingsphere-parser-sql-hive</artifactId>
-         <version>${shardingsphere.version}</version>
-      </dependency>
-      <dependency>
-         <groupId>org.apache.hive</groupId>
-         <artifactId>hive-jdbc</artifactId>
-         <version>4.0.0</version>
-      </dependency>
-      <dependency>
-         <groupId>org.apache.hive</groupId>
-         <artifactId>hive-service</artifactId>
-         <version>4.0.0</version>
-      </dependency>
-      <dependency>
-         <groupId>org.apache.hadoop</groupId>
-         <artifactId>hadoop-client-api</artifactId>
-         <version>3.3.6</version>
-      </dependency>
-   </dependencies>
-</project>
-```
-
-This can lead to a large number of dependency conflicts.
-If the user does not want to manually resolve potentially thousands of lines of dependency conflicts, 
-a third-party build of the HiveServer2 JDBC Driver `Thin JAR` can be used.
-An example of a possible configuration is as follows,
-
-```xml
-<project>
-    <dependencies>
-       <dependency>
-         <groupId>org.apache.shardingsphere</groupId>
-         <artifactId>shardingsphere-jdbc</artifactId>
-         <version>${shardingsphere.version}</version>
-       </dependency>
-       <dependency>
-            <groupId>org.apache.shardingsphere</groupId>
-            <artifactId>shardingsphere-infra-database-hive</artifactId>
-            <version>${shardingsphere.version}</version>
-       </dependency>
-       <dependency>
-          <groupId>org.apache.shardingsphere</groupId>
-          <artifactId>shardingsphere-parser-sql-hive</artifactId>
-          <version>${shardingsphere.version}</version>
-       </dependency>
-       <dependency>
-          <groupId>io.github.linghengqian</groupId>
-          <artifactId>hive-server2-jdbc-driver-thin</artifactId>
-          <version>1.2.0</version>
-          <exclusions>
-             <exclusion>
-                <groupId>com.fasterxml.woodstox</groupId>
-                <artifactId>woodstox-core</artifactId>
-             </exclusion>
-          </exclusions>
-       </dependency>
-    </dependencies>
-</project>
-```
-
-Affected by https://github.com/grpc/grpc-java/issues/10601 , should users incorporate `org.apache.hive:hive-service` into their project,
+7. Affected by https://github.com/grpc/grpc-java/issues/10601 , should users incorporate `org.apache.hive:hive-jdbc` into their project,
 it is imperative to create a file named `native-image.properties` within the directory `META-INF/native-image/io.grpc/grpc-netty-shaded` of the classpath,
 containing the following content,
+
 ```properties
 Args=--initialize-at-run-time=\
     io.grpc.netty.shaded.io.netty.channel.ChannelHandlerMask,\
@@ -455,53 +336,16 @@ Args=--initialize-at-run-time=\
     io.grpc.netty.shaded.io.netty.util.AttributeKey
 ```
 
-In order to be able to use DML SQL statements such as `delete`, when connecting to HiveServer2,
-users should consider using only ACID-supported tables in ShardingSphere JDBC. `apache/hive` provides a variety of transaction solutions.
+ShardingSphere's unit test only uses the Maven module `io.github.linghengqian:hive-server2-jdbc-driver-thin` to verify the availability under GraalVM Native Image.
 
-The first option is to use ACID tables, and the possible table creation process is as follows.
-Due to its outdated catalog-based table format, 
-users may have to wait before and after DML statement execution to let HiveServer2 complete the inefficient DML operations.
+8. Due to https://github.com/oracle/graal/issues/7979 , 
+the Oracle JDBC Driver corresponding to the `com.oracle.database.jdbc:ojdbc8` Maven module cannot be used under GraalVM Native Image.
 
-```sql
-set metastore.compactor.initiator.on=true;
-set metastore.compactor.cleaner.on=true;
-set metastore.compactor.worker.threads=5;
+9. Due to https://github.com/apache/doris/issues/9426, when connecting to Apache Doris FE via Shardinghere JDBC,
+   users need to provide GraalVM Reachability Metadata related to the `apache/doris` integration module.
 
-set hive.support.concurrency=true;
-set hive.exec.dynamic.partition.mode=nonstrict;
-set hive.txn.manager=org.apache.hadoop.hive.ql.lockmgr.DbTxnManager;
-
-CREATE TABLE IF NOT EXISTS t_order
-(
-    order_id   BIGINT,
-    order_type INT,
-    user_id    INT    NOT NULL,
-    address_id BIGINT NOT NULL,
-    status     VARCHAR(50),
-    PRIMARY KEY (order_id) disable novalidate
-) CLUSTERED BY (order_id) INTO 2 BUCKETS STORED AS ORC TBLPROPERTIES ('transactional' = 'true');
-```
-
-The second option is to use Iceberg table. The possible table creation process is as follows.
-Apache Iceberg table format is poised to replace the traditional Hive table format in the coming years, 
-see https://blog.cloudera.com/from-hive-tables-to-iceberg-tables-hassle-free/ .
-
-```sql
-set iceberg.mr.schema.auto.conversion=true;
-
-CREATE TABLE IF NOT EXISTS t_order
-(
-    order_id   BIGINT,
-    order_type INT,
-    user_id    INT    NOT NULL,
-    address_id BIGINT NOT NULL,
-    status     VARCHAR(50),
-    PRIMARY KEY (order_id) disable novalidate
-) STORED BY ICEBERG STORED AS ORC TBLPROPERTIES ('format-version' = '2');
-```
-
-HiveServer2 does not support local transactions, XA transactions, and Seata AT mode transactions at the ShardingSphere integration level. 
-More discussion is available at https://cwiki.apache.org/confluence/display/Hive/Hive+Transactions .
+10. Due to https://github.com/prestodb/presto/issues/23226, when connecting to Presto Server via Shardinghere JDBC,
+    users need to provide GraalVM Reachability Metadata related to the `com.facebook.presto:presto-jdbc` and `prestodb/presto` integration module.
 
 ## Contribute GraalVM Reachability Metadata
 
@@ -516,13 +360,13 @@ This subset of unit tests avoids the use of third-party libraries such as Mockit
 
 ShardingSphere defines the Maven Profile of `nativeTestInShardingSphere` for executing nativeTest for the `shardingsphere-test-native` module.
 
+Contributors must install Docker Engine to execute unit tests related to `testcontainers-java`, as per https://java.testcontainers.org/supported_docker_environment/ .
+
 Assuming that the contributor is under a new Ubuntu 22.04.4 LTS instance, Contributors can manage the JDK and tool chain through 
 `SDKMAN!` through the following bash command, and execute nativeTest for the `shardingsphere-test-native` submodule.
 
-You must install Docker Engine to execute `testcontainers-java` related unit tests.
-
 ```bash
-sudo apt install unzip zip curl sed -y
+sudo apt install unzip zip -y
 curl -s "https://get.sdkman.io" | bash
 source "$HOME/.sdkman/bin/sdkman-init.sh"
 sdk install java 22.0.2-graalce
@@ -531,7 +375,7 @@ sudo apt-get install build-essential zlib1g-dev -y
 
 git clone git@github.com:apache/shardingsphere.git
 cd ./shardingsphere/
-./mvnw -PnativeTestInShardingSphere -e clean test
+./mvnw -PnativeTestInShardingSphere -e -T 1C clean test
 ```
 
 When contributors discover that GraalVM Reachability Metadata is missing for a third-party library not related to ShardingSphere, 
@@ -561,8 +405,32 @@ contributors should place it on the classpath of the `shardingsphere-test-native
 ```bash
 git clone git@github.com:apache/shardingsphere.git
 cd ./shardingsphere/
-./mvnw -PgenerateMetadata -DskipNativeTests -e clean test native:metadata-copy
+./mvnw -PgenerateMetadata -e -T 1C clean test native:metadata-copy
 ```
 
-Contributors should avoid using Maven's parallel builds feature when using the Maven Plugin for GraalVM Native Build Tools. 
-The Maven Plugin for GraalVM Native Build Tools is not thread-safe and is incompatible with https://cwiki.apache.org/confluence/display/MAVEN/Parallel+builds+in+Maven+3 .
+Affected by https://github.com/apache/shardingsphere/issues/33206 ,
+After the contributor executes `./mvnw -PgenerateMetadata -T 1C -e clean test native:metadata-copy`,
+`infra/reachability-metadata/src/main/resources/META-INF/native-image/org.apache.shardingsphere/generated-reachability-metadata/resource-config.json` will generate unnecessary JSON entries containing absolute paths,
+similar to the following.
+
+```json
+{
+   "resources":{
+      "includes":[{
+         "condition":{"typeReachable":"org.apache.shardingsphere.proxy.backend.config.ProxyConfigurationLoader"},
+         "pattern":"\\Qhome/runner/work/shardingsphere/shardingsphere/test/native/src/test/resources/test-native/yaml/proxy/databases/postgresql//global.yaml\\E"
+      }, {
+         "condition":{"typeReachable":"org.apache.shardingsphere.proxy.backend.config.ProxyConfigurationLoader"},
+         "pattern":"\\Qhome/runner/work/shardingsphere/shardingsphere/test/native/src/test/resources/test-native/yaml/proxy/databases/postgresql/\\E"
+      }, {
+         "condition":{"typeReachable":"org.apache.shardingsphere.proxy.backend.config.ProxyConfigurationLoader"},
+         "pattern":"\\Qhome/runner/work/shardingsphere/shardingsphere/test/native/src/test/resources/test-native/yaml/proxy/features/sharding//global.yaml\\E"
+      }, {
+         "condition":{"typeReachable":"org.apache.shardingsphere.proxy.backend.config.ProxyConfigurationLoader"},
+         "pattern":"\\Qhome/runner/work/shardingsphere/shardingsphere/test/native/src/test/resources/test-native/yaml/proxy/features/sharding/\\E"
+      }]},
+   "bundles":[]
+}
+```
+
+Contributors should always manually remove these JSON entries containing absolute paths and wait for https://github.com/oracle/graal/issues/8417 to be resolved.
